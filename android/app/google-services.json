@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "141023366496",
+    "firebase_url": "https://sensnetsmartdoorlock-default-rtdb.firebaseio.com",
+    "project_id": "sensnetsmartdoorlock",
+    "storage_bucket": "sensnetsmartdoorlock.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:141023366496:android:cba7236aec7b36dd19a205",
+        "android_client_info": {
+          "package_name": "com.example.card_scanner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzj1hoRkEv1LsCUmbkaxpZ7Xz0SO1QgdQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
