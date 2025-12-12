@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class UserDetailsPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -11,21 +13,26 @@ class UserDetailsPage extends StatefulWidget {
   State<UserDetailsPage> createState() => _UserDetailsPageState();
 }
 
-class _UserDetailsPageState extends State<UserDetailsPage> {
+class _UserDetailsPageState extends State<UserDetailsPage>
+    with SingleTickerProviderStateMixin {
   final logsDb = FirebaseDatabase.instance.ref("logs");
   List<Map<String, dynamic>> userLogs = [];
   bool isLoading = true;
 
   String selectedFilter = "all";
-  String selectedDevice = "all";
-  DateTime? selectedDate;
-
-  Set<String> deviceIds = {};
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     loadUserLogs();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void loadUserLogs() async {
@@ -36,16 +43,10 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
 
       if (data != null) {
         List<Map<String, dynamic>> loaded = [];
-        Set<String> devices = {};
 
-        // Loop through all devices
         data.forEach((deviceId, deviceLogs) {
-          devices.add(deviceId);
-
           if (deviceLogs is Map) {
-            // Loop through logs for this device
             deviceLogs.forEach((logId, logData) {
-              // Check if this log belongs to current user
               if (logData["barcode"] == widget.user["barcodeId"]) {
                 loaded.add({
                   "logId": logId,
@@ -59,7 +60,6 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
           }
         });
 
-        // Sort by timestamp (most recent first)
         loaded.sort((a, b) {
           try {
             DateTime timeA = DateTime.parse(a["timestamp"]);
@@ -73,7 +73,6 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
         if (mounted) {
           setState(() {
             userLogs = loaded;
-            deviceIds = devices;
             isLoading = false;
           });
         }
@@ -89,66 +88,15 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
   }
 
   List<Map<String, dynamic>> getFilteredLogs() {
-    List<Map<String, dynamic>> filtered = userLogs;
-
-    // Filter by status
-    if (selectedFilter == "entry") {
-      filtered = filtered.where((log) => log["status"] == "entry").toList();
-    } else if (selectedFilter == "exit") {
-      filtered = filtered.where((log) => log["status"] == "exit").toList();
-    } else if (selectedFilter == "denied") {
-      filtered = filtered.where((log) => log["status"] == "denied").toList();
-    }
-
-    // Filter by device
-    if (selectedDevice != "all") {
-      filtered =
-          filtered.where((log) => log["deviceID"] == selectedDevice).toList();
-    }
-
-    // Filter by date
-    if (selectedDate != null) {
-      filtered = filtered.where((log) {
-        try {
-          DateTime logDate = DateTime.parse(log["timestamp"]);
-          return logDate.year == selectedDate!.year &&
-              logDate.month == selectedDate!.month &&
-              logDate.day == selectedDate!.day;
-        } catch (e) {
-          return false;
-        }
-      }).toList();
-    }
-
-    return filtered;
-  }
-
-  Future<void> selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-
-    if (picked != null) {
-      setState(() {
-        selectedDate = picked;
-      });
-    }
-  }
-
-  void clearDateFilter() {
-    setState(() {
-      selectedDate = null;
-    });
+    if (selectedFilter == "all") return userLogs;
+    return userLogs.where((log) => log["status"] == selectedFilter).toList();
   }
 
   String formatTimestamp(String timestamp) {
     try {
       DateTime dt = DateTime.parse(timestamp);
       return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} "
-          "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}";
+          "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (e) {
       return timestamp;
     }
@@ -186,330 +134,606 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
     final stats = getStatistics();
     final filteredLogs = getFilteredLogs();
     final isAllowed = widget.user["access"] == "allowed";
+    final isActive = widget.user["isActive"];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.user["name"]),
-        elevation: 2,
+      backgroundColor: Colors.grey.shade50,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              isActive && isAllowed
+                  ? Colors.green.shade700
+                  : Colors.grey.shade600,
+              isActive && isAllowed
+                  ? Colors.green.shade500
+                  : Colors.grey.shade400,
+              Colors.white,
+            ],
+            stops: const [0.0, 0.25, 0.25],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header with User Info
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.white),
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Edit feature coming soon!',
+                                  style: GoogleFonts.poppins(),
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // User Avatar
+                    Hero(
+                      tag: 'user_${widget.user["barcodeId"]}',
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isActive && isAllowed
+                                ? [Colors.white, Colors.white.withOpacity(0.9)]
+                                : [Colors.grey.shade300, Colors.grey.shade400],
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            widget.user["name"][0].toUpperCase(),
+                            style: GoogleFonts.poppins(
+                              fontSize: 40,
+                              fontWeight: FontWeight.bold,
+                              color: isActive && isAllowed
+                                  ? Colors.green.shade700
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ).animate().scale(duration: 400.ms),
+
+                    const SizedBox(height: 16),
+
+                    // User Name
+                    Text(
+                      widget.user["name"],
+                      style: GoogleFonts.poppins(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ).animate().fadeIn(delay: 200.ms),
+
+                    const SizedBox(height: 8),
+
+                    // Role & Status Badges
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            widget.user["role"].toString().toUpperCase(),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isAllowed
+                                ? Colors.green.withOpacity(0.3)
+                                : Colors.red.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            widget.user["access"].toString().toUpperCase(),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? Colors.blue.withOpacity(0.3)
+                                : Colors.grey.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            isActive ? "ACTIVE" : "INACTIVE",
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ).animate().fadeIn(delay: 300.ms),
+                  ],
+                ),
+              ),
+
+              // Content
+              Expanded(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                  ),
+                  child: Column(
+                    children: [
+                      // Tab Bar
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.shade200,
+                              blurRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: TabBar(
+                          controller: _tabController,
+                          labelColor: Colors.blue.shade700,
+                          unselectedLabelColor: Colors.grey,
+                          labelStyle: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          indicatorColor: Colors.blue.shade700,
+                          tabs: const [
+                            Tab(
+                                text: "Details",
+                                icon: Icon(Icons.info_outline)),
+                            Tab(text: "Activity", icon: Icon(Icons.history)),
+                          ],
+                        ),
+                      ),
+
+                      // Tab Views
+                      Expanded(
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildDetailsTab(),
+                            _buildActivityTab(filteredLogs),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      body: Column(
+    );
+  }
+
+  Widget _buildDetailsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // User Info Card
+          // Barcode Card
           Card(
-            margin: const EdgeInsets.all(16),
-            elevation: 4,
+            elevation: 3,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade600, Colors.blue.shade800],
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'BARCODE ID',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SelectableText(
+                    widget.user["barcodeId"],
+                    style: GoogleFonts.orbitron(
+                      fontSize: 28,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.copy, size: 18),
+                    label: Text(
+                      'Copy ID',
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.blue.shade700,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: widget.user["barcodeId"]),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "Barcode ID copied!",
+                            style: GoogleFonts.poppins(),
+                          ),
+                          backgroundColor: Colors.green.shade600,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
+
+          const SizedBox(height: 20),
+
+          // Validity Card
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
-                        backgroundColor: widget.user["isActive"] && isAllowed
-                            ? Colors.green
-                            : Colors.grey,
-                        radius: 30,
-                        child: Text(
-                          widget.user["name"][0].toUpperCase(),
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 24),
+                      Icon(Icons.calendar_today, color: Colors.blue.shade600),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Validity Period',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.user["name"],
-                              style: const TextStyle(
-                                  fontSize: 20, fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              widget.user["role"].toString().toUpperCase(),
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        children: [
-                          Chip(
-                            label: Text(
-                                widget.user["access"].toString().toUpperCase()),
-                            backgroundColor: isAllowed
-                                ? Colors.green.shade100
-                                : Colors.red.shade100,
-                          ),
-                          const SizedBox(height: 4),
-                          Chip(
-                            label: Text(widget.user["isActive"]
-                                ? "Active"
-                                : "Inactive"),
-                            backgroundColor: widget.user["isActive"]
-                                ? Colors.blue.shade100
-                                : Colors.grey.shade300,
-                          ),
-                        ],
                       ),
                     ],
                   ),
-                  const Divider(height: 24),
-                  _buildInfoRow("Valid From", widget.user["validFrom"]),
-                  const SizedBox(height: 8),
-                  _buildInfoRow("Valid Until", widget.user["validUntil"]),
+                  const SizedBox(height: 16),
+                  _buildInfoRow(
+                    "Valid From",
+                    widget.user["validFrom"],
+                    Icons.event,
+                    Colors.green,
+                  ),
                   const SizedBox(height: 12),
-                  const Text("Barcode ID:",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
+                  _buildInfoRow(
+                    "Valid Until",
+                    widget.user["validUntil"],
+                    Icons.event_busy,
+                    Colors.red,
+                  ),
+                ],
+              ),
+            ),
+          ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1, end: 0),
+
+          const SizedBox(height: 20),
+
+          // Statistics Card
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
                     children: [
-                      Expanded(
-                        child: SelectableText(
-                          widget.user["barcodeId"],
-                          style:
-                              const TextStyle(fontSize: 12, color: Colors.blue),
+                      Icon(Icons.bar_chart, color: Colors.blue.shade600),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Activity Statistics',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.copy, size: 20),
-                        onPressed: () {
-                          Clipboard.setData(
-                              ClipboardData(text: widget.user["barcodeId"]));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Barcode ID copied")),
-                          );
-                        },
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStatItem(
+                        getStatistics()["totalEntries"]!,
+                        "Entries",
+                        Colors.green,
+                        Icons.login,
+                      ),
+                      _buildStatItem(
+                        getStatistics()["totalExits"]!,
+                        "Exits",
+                        Colors.orange,
+                        Icons.logout,
+                      ),
+                      _buildStatItem(
+                        getStatistics()["totalDenied"]!,
+                        "Denied",
+                        Colors.red,
+                        Icons.block,
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-          ),
-
-          // Statistics Cards
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                      "Entries", stats["totalEntries"]!, Colors.green),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatCard(
-                      "Exits", stats["totalExits"]!, Colors.orange),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatCard(
-                      "Denied", stats["totalDenied"]!, Colors.red),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Filter Section
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.grey[100],
-            child: Column(
-              children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      const Text("Status: ",
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("All"),
-                        selected: selectedFilter == "all",
-                        onSelected: (_) =>
-                            setState(() => selectedFilter = "all"),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("Entry"),
-                        selected: selectedFilter == "entry",
-                        onSelected: (_) =>
-                            setState(() => selectedFilter = "entry"),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("Exit"),
-                        selected: selectedFilter == "exit",
-                        onSelected: (_) =>
-                            setState(() => selectedFilter = "exit"),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("Denied"),
-                        selected: selectedFilter == "denied",
-                        onSelected: (_) =>
-                            setState(() => selectedFilter = "denied"),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text("Device: ",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            ChoiceChip(
-                              label: const Text("All"),
-                              selected: selectedDevice == "all",
-                              onSelected: (_) =>
-                                  setState(() => selectedDevice = "all"),
-                            ),
-                            ...deviceIds.map((deviceId) => Padding(
-                                  padding: const EdgeInsets.only(left: 8),
-                                  child: ChoiceChip(
-                                    label: Text(deviceId),
-                                    selected: selectedDevice == deviceId,
-                                    onSelected: (_) => setState(
-                                        () => selectedDevice = deviceId),
-                                  ),
-                                )),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text("Date: ",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      icon: const Icon(Icons.calendar_today, size: 18),
-                      label: Text(selectedDate != null
-                          ? "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}"
-                          : "Select Date"),
-                      onPressed: () => selectDate(context),
-                    ),
-                    if (selectedDate != null)
-                      IconButton(
-                        icon: const Icon(Icons.clear, size: 20),
-                        onPressed: clearDateFilter,
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Logs List
-          Expanded(
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : filteredLogs.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.history, size: 64, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text("No logs found"),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: filteredLogs.length,
-                        padding: const EdgeInsets.all(8),
-                        itemBuilder: (context, index) {
-                          final log = filteredLogs[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                                vertical: 4, horizontal: 8),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: getStatusColor(log["status"]),
-                                child: Icon(
-                                  getStatusIcon(log["status"]),
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                log["status"].toString().toUpperCase(),
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text("Device: ${log["deviceID"]}"),
-                                  Text(
-                                      "Time: ${formatTimestamp(log["timestamp"])}"),
-                                ],
-                              ),
-                              isThreeLine: true,
-                            ),
-                          );
-                        },
-                      ),
-          ),
+          ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1, end: 0),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildActivityTab(List<Map<String, dynamic>> filteredLogs) {
+    return Column(
       children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            "$label:",
-            style: const TextStyle(fontWeight: FontWeight.bold),
+        // Filter Chips
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip("All", "all"),
+                const SizedBox(width: 8),
+                _buildFilterChip("Entry", "entry"),
+                const SizedBox(width: 8),
+                _buildFilterChip("Exit", "exit"),
+                const SizedBox(width: 8),
+                _buildFilterChip("Denied", "denied"),
+              ],
+            ),
           ),
         ),
-        Expanded(child: Text(value)),
+
+        // Logs List
+        Expanded(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : filteredLogs.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.history,
+                            size: 64,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "No activity logs",
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filteredLogs.length,
+                      itemBuilder: (context, index) {
+                        final log = filteredLogs[index];
+                        return Card(
+                          elevation: 1,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(16),
+                            leading: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: getStatusColor(log["status"])
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                getStatusIcon(log["status"]),
+                                color: getStatusColor(log["status"]),
+                              ),
+                            ),
+                            title: Text(
+                              log["status"].toString().toUpperCase(),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 4),
+                                Text(
+                                  formatTimestamp(log["timestamp"]),
+                                  style: GoogleFonts.poppins(fontSize: 12),
+                                ),
+                                Text(
+                                  "Device: ${log["deviceID"]}",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                            .animate()
+                            .fadeIn(delay: Duration(milliseconds: 50 * index))
+                            .slideX(begin: 0.2, end: 0);
+                      },
+                    ),
+        ),
       ],
     );
   }
 
-  Widget _buildStatCard(String label, int value, Color color) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Text(
-              value.toString(),
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = selectedFilter == value;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) {
+        setState(() => selectedFilter = value);
+      },
+      labelStyle: GoogleFonts.poppins(
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        color: isSelected ? Colors.white : Colors.grey.shade700,
       ),
+      backgroundColor: Colors.grey.shade200,
+      selectedColor: Colors.blue.shade600,
+      checkmarkColor: Colors.white,
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatItem(int value, String label, Color color, IconData icon) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: color, size: 28),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value.toString(),
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
     );
   }
 }

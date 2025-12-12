@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:uuid/uuid.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'dart:math';
 
 class AddUserPage extends StatefulWidget {
   const AddUserPage({super.key});
@@ -24,20 +26,46 @@ class _AddUserPageState extends State<AddUserPage> {
   final roles = ["employee", "visitor", "manager", "contractor"];
   final accessLevels = ["allowed", "denied"];
 
+  // Generate 8-digit numeric barcode ID
+  String _generate8DigitBarcode() {
+    final random = Random();
+    // Generate number between 10000000 and 99999999
+    int barcodeNum = 10000000 + random.nextInt(90000000);
+    return barcodeNum.toString();
+  }
+
+  // Check if barcode already exists
+  Future<bool> _barcodeExists(String barcode) async {
+    final snapshot = await database.child(barcode).get();
+    return snapshot.exists;
+  }
+
+  // Generate unique 8-digit barcode
+  Future<String> _generateUniqueBarcode() async {
+    String barcode;
+    bool exists;
+
+    do {
+      barcode = _generate8DigitBarcode();
+      exists = await _barcodeExists(barcode);
+    } while (exists);
+
+    return barcode;
+  }
+
   void saveUser() async {
     String name = nameController.text.trim();
 
     if (name.isEmpty) {
-      _showSnackBar("Please enter user name");
+      _showSnackBar("Please enter user name", Colors.orange);
       return;
     }
 
     setState(() => isLoading = true);
 
     try {
-      // Generate unique barcode ID
-      final uuid = const Uuid();
-      String barcodeId = uuid.v4();
+      // Generate unique 8-digit barcode ID
+      String barcodeId = await _generateUniqueBarcode();
 
       // Store user with barcodeId as the key
       await database.child(barcodeId).set({
@@ -53,42 +81,134 @@ class _AddUserPageState extends State<AddUserPage> {
 
       showDialog(
         context: context,
-        builder: (_) => AlertDialog(
-          title: const Text("✓ User Created Successfully"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Name: $name"),
-              const SizedBox(height: 8),
-              Text("Role: $selectedRole"),
-              const SizedBox(height: 8),
-              Text("Access: $selectedAccess"),
-              const SizedBox(height: 8),
-              const Text("Barcode ID:",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              SelectableText(
-                barcodeId,
-                style: const TextStyle(fontSize: 12, color: Colors.blue),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.copy, size: 18),
-                label: const Text("Copy Barcode ID"),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: barcodeId));
-                  _showSnackBar("Barcode ID copied to clipboard");
-                },
-              ),
-            ],
+        barrierDismissible: false,
+        builder: (_) => Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_circle,
+                    size: 60,
+                    color: Colors.green.shade600,
+                  ),
+                ).animate().scale(duration: 400.ms),
+                const SizedBox(height: 20),
+                Text(
+                  'User Created Successfully!',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoRow("Name:", name),
+                      const SizedBox(height: 8),
+                      _buildInfoRow("Role:", selectedRole.toUpperCase()),
+                      const SizedBox(height: 8),
+                      _buildInfoRow("Access:", selectedAccess.toUpperCase()),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade400, Colors.blue.shade600],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'BARCODE ID',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SelectableText(
+                        barcodeId,
+                        style: GoogleFonts.orbitron(
+                          fontSize: 32,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.copy, size: 18),
+                        label: Text(
+                          'Copy Barcode',
+                          style:
+                              GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.blue.shade700,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: barcodeId));
+                          _showSnackBar(
+                              "Barcode copied to clipboard!", Colors.green);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Done',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("OK"),
-            )
-          ],
         ),
       );
 
@@ -101,15 +221,23 @@ class _AddUserPageState extends State<AddUserPage> {
         isActive = true;
       });
     } catch (e) {
-      _showSnackBar("Error: ${e.toString()}");
+      _showSnackBar("Error: ${e.toString()}", Colors.red);
     } finally {
       setState(() => isLoading = false);
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
     );
   }
 
@@ -119,6 +247,16 @@ class _AddUserPageState extends State<AddUserPage> {
       initialDate: isFromDate ? validFrom : validUntil,
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.blue.shade600,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null) {
@@ -132,117 +270,410 @@ class _AddUserPageState extends State<AddUserPage> {
     }
   }
 
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade700,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: Colors.blue.shade700,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text("Add New User"),
-        elevation: 2,
+        title: Text(
+          "Add New User",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: Colors.blue.shade600,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: "User Name",
-                prefixIcon: Icon(Icons.person),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<String>(
-              value: selectedRole,
-              decoration: const InputDecoration(
-                labelText: "Role",
-                prefixIcon: Icon(Icons.badge),
-                border: OutlineInputBorder(),
-              ),
-              items: roles.map((role) {
-                return DropdownMenuItem(
-                  value: role,
-                  child: Text(role.toUpperCase()),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() => selectedRole = value!);
-              },
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<String>(
-              value: selectedAccess,
-              decoration: const InputDecoration(
-                labelText: "Access Level",
-                prefixIcon: Icon(Icons.security),
-                border: OutlineInputBorder(),
-              ),
-              items: accessLevels.map((access) {
-                return DropdownMenuItem(
-                  value: access,
-                  child: Text(access.toUpperCase()),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() => selectedAccess = value!);
-              },
-            ),
-            const SizedBox(height: 20),
+            // User Name Card
             Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Validity Period",
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.person_add,
+                            color: Colors.blue.shade600,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'User Information',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      leading: const Icon(Icons.calendar_today),
-                      title: const Text("Valid From"),
-                      subtitle: Text(validFrom.toString().substring(0, 16)),
-                      onTap: () => _selectDate(context, true),
-                    ),
-                    const Divider(),
-                    ListTile(
-                      leading: const Icon(Icons.event),
-                      title: const Text("Valid Until"),
-                      subtitle: Text(validUntil.toString().substring(0, 16)),
-                      onTap: () => _selectDate(context, false),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: nameController,
+                      style: GoogleFonts.poppins(),
+                      decoration: InputDecoration(
+                        labelText: "Full Name",
+                        labelStyle: GoogleFonts.poppins(),
+                        prefixIcon: const Icon(Icons.person_outline),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            SwitchListTile(
-              title: const Text("Active Status"),
-              subtitle: Text(isActive ? "User is active" : "User is inactive"),
-              value: isActive,
-              onChanged: (value) {
-                setState(() => isActive = value);
-              },
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton.icon(
-              onPressed: isLoading ? null : saveUser,
-              icon: isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add),
-              label: Text(isLoading ? "Creating..." : "Create User + Barcode"),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-                textStyle: const TextStyle(fontSize: 18),
+            ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
+
+            const SizedBox(height: 16),
+
+            // Role & Access Card
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-            ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.badge,
+                            color: Colors.orange.shade600,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Role & Permissions',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    DropdownButtonFormField<String>(
+                      value: selectedRole,
+                      style: GoogleFonts.poppins(),
+                      decoration: InputDecoration(
+                        labelText: "Role",
+                        labelStyle: GoogleFonts.poppins(),
+                        prefixIcon: const Icon(Icons.work_outline),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                      ),
+                      items: roles.map((role) {
+                        return DropdownMenuItem(
+                          value: role,
+                          child: Text(role.toUpperCase()),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => selectedRole = value!);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: selectedAccess,
+                      style: GoogleFonts.poppins(),
+                      decoration: InputDecoration(
+                        labelText: "Access Level",
+                        labelStyle: GoogleFonts.poppins(),
+                        prefixIcon: const Icon(Icons.security),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                      ),
+                      items: accessLevels.map((access) {
+                        return DropdownMenuItem(
+                          value: access,
+                          child: Row(
+                            children: [
+                              Icon(
+                                access == "allowed"
+                                    ? Icons.check_circle
+                                    : Icons.cancel,
+                                color: access == "allowed"
+                                    ? Colors.green
+                                    : Colors.red,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(access.toUpperCase()),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => selectedAccess = value!);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1, end: 0),
+
+            const SizedBox(height: 16),
+
+            // Validity Period Card
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.calendar_today,
+                            color: Colors.green.shade600,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Validity Period',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () => _selectDate(context, true),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.grey.shade50,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.event, color: Colors.blue.shade600),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Valid From',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                Text(
+                                  validFrom.toString().substring(0, 16),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () => _selectDate(context, false),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.grey.shade50,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.event_busy, color: Colors.red.shade600),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Valid Until',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                Text(
+                                  validUntil.toString().substring(0, 16),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1, end: 0),
+
+            const SizedBox(height: 16),
+
+            // Active Status Card
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: SwitchListTile(
+                title: Text(
+                  "Active Status",
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  isActive ? "User is active" : "User is inactive",
+                  style: GoogleFonts.poppins(),
+                ),
+                value: isActive,
+                activeColor: Colors.green.shade600,
+                onChanged: (value) {
+                  setState(() => isActive = value);
+                },
+                secondary: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color:
+                        isActive ? Colors.green.shade50 : Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isActive ? Icons.check_circle : Icons.cancel,
+                    color:
+                        isActive ? Colors.green.shade600 : Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.1, end: 0),
+
+            const SizedBox(height: 30),
+
+            // Create Button
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade600, Colors.blue.shade800],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.shade300,
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                onPressed: isLoading ? null : saveUser,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.add_circle, size: 24),
+                          const SizedBox(width: 12),
+                          Text(
+                            "Create User & Generate Barcode",
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ).animate().fadeIn(delay: 500.ms).scale(),
           ],
         ),
       ),

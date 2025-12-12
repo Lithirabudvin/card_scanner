@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
 
 class AllLogsPage extends StatefulWidget {
   const AllLogsPage({super.key});
@@ -58,12 +61,10 @@ class _AllLogsPageState extends State<AllLogsPage> {
         List<Map<String, dynamic>> loaded = [];
         Set<String> devices = {};
 
-        // Loop through all devices
         data.forEach((deviceId, deviceLogs) {
           devices.add(deviceId);
 
           if (deviceLogs is Map) {
-            // Loop through logs for this device
             deviceLogs.forEach((logId, logData) {
               loaded.add({
                 "logId": logId,
@@ -76,7 +77,6 @@ class _AllLogsPageState extends State<AllLogsPage> {
           }
         });
 
-        // Sort by timestamp (most recent first)
         loaded.sort((a, b) {
           try {
             DateTime timeA = DateTime.parse(a["timestamp"]);
@@ -108,22 +108,16 @@ class _AllLogsPageState extends State<AllLogsPage> {
   List<Map<String, dynamic>> getFilteredLogs() {
     List<Map<String, dynamic>> filtered = logs;
 
-    // Filter by status
-    if (selectedFilter == "entry") {
-      filtered = filtered.where((log) => log["status"] == "entry").toList();
-    } else if (selectedFilter == "exit") {
-      filtered = filtered.where((log) => log["status"] == "exit").toList();
-    } else if (selectedFilter == "denied") {
-      filtered = filtered.where((log) => log["status"] == "denied").toList();
+    if (selectedFilter != "all") {
+      filtered =
+          filtered.where((log) => log["status"] == selectedFilter).toList();
     }
 
-    // Filter by device
     if (selectedDevice != "all") {
       filtered =
           filtered.where((log) => log["deviceID"] == selectedDevice).toList();
     }
 
-    // Filter by date
     if (selectedDate != null) {
       filtered = filtered.where((log) {
         try {
@@ -146,6 +140,16 @@ class _AllLogsPageState extends State<AllLogsPage> {
       initialDate: selectedDate ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.orange.shade600,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null) {
@@ -164,8 +168,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
   String formatTimestamp(String timestamp) {
     try {
       DateTime dt = DateTime.parse(timestamp);
-      return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} "
-          "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}";
+      return DateFormat('MMM dd, yyyy HH:mm').format(dt);
     } catch (e) {
       return timestamp;
     }
@@ -198,7 +201,6 @@ class _AllLogsPageState extends State<AllLogsPage> {
       "totalEntries": totalEntries,
       "totalExits": totalExits,
       "totalDenied": totalDenied,
-      "totalLogs": logs.length,
     };
   }
 
@@ -208,260 +210,501 @@ class _AllLogsPageState extends State<AllLogsPage> {
     final filteredLogs = getFilteredLogs();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("All Door Logs"),
-        elevation: 2,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              loadUsers();
-              loadLogs();
-            },
+      backgroundColor: Colors.grey.shade50,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.orange.shade700,
+              Colors.orange.shade500,
+              Colors.white,
+            ],
+            stops: const [0.0, 0.2, 0.2],
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Statistics Cards
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                      "Entries", stats["totalEntries"]!, Colors.green),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatCard(
-                      "Exits", stats["totalExits"]!, Colors.orange),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatCard(
-                      "Denied", stats["totalDenied"]!, Colors.red),
-                ),
-              ],
-            ),
-          ),
-
-          // Filter Section
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.grey[100],
-            child: Column(
-              children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      const Text("Status: ",
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("All"),
-                        selected: selectedFilter == "all",
-                        onSelected: (_) =>
-                            setState(() => selectedFilter = "all"),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("Entry"),
-                        selected: selectedFilter == "entry",
-                        onSelected: (_) =>
-                            setState(() => selectedFilter = "entry"),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("Exit"),
-                        selected: selectedFilter == "exit",
-                        onSelected: (_) =>
-                            setState(() => selectedFilter = "exit"),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("Denied"),
-                        selected: selectedFilter == "denied",
-                        onSelected: (_) =>
-                            setState(() => selectedFilter = "denied"),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                   children: [
-                    const Text("Device: ",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            ChoiceChip(
-                              label: const Text("All"),
-                              selected: selectedDevice == "all",
-                              onSelected: (_) =>
-                                  setState(() => selectedDevice = "all"),
-                            ),
-                            ...deviceIds.map((deviceId) => Padding(
-                                  padding: const EdgeInsets.only(left: 8),
-                                  child: ChoiceChip(
-                                    label: Text(deviceId),
-                                    selected: selectedDevice == deviceId,
-                                    onSelected: (_) => setState(
-                                        () => selectedDevice = deviceId),
-                                  ),
-                                )),
-                          ],
+                    Row(
+                      children: [
+                        IconButton(
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text("Date: ",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      icon: const Icon(Icons.calendar_today, size: 18),
-                      label: Text(selectedDate != null
-                          ? "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}"
-                          : "Select Date"),
-                      onPressed: () => selectDate(context),
-                    ),
-                    if (selectedDate != null)
-                      IconButton(
-                        icon: const Icon(Icons.clear, size: 20),
-                        onPressed: clearDateFilter,
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Logs List
-          Expanded(
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : filteredLogs.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.history, size: 64, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text("No logs found"),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: filteredLogs.length,
-                        padding: const EdgeInsets.all(8),
-                        itemBuilder: (context, index) {
-                          final log = filteredLogs[index];
-                          final userName = getUserName(log["barcode"]);
-
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                                vertical: 4, horizontal: 8),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: getStatusColor(log["status"]),
-                                child: Icon(
-                                  getStatusIcon(log["status"]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Door Logs',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
                                   color: Colors.white,
-                                  size: 20,
                                 ),
                               ),
-                              title: Text(
-                                "${log["status"].toString().toUpperCase()} - $userName",
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
+                              Text(
+                                '${filteredLogs.length} log(s) found',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
                               ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text("Device: ${log["deviceID"]}"),
-                                  Text(
-                                      "Time: ${formatTimestamp(log["timestamp"])}"),
-                                ],
-                              ),
-                              isThreeLine: true,
-                              trailing: IconButton(
-                                icon: const Icon(Icons.info_outline),
-                                onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (_) => AlertDialog(
-                                      title: const Text("Log Details"),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          _buildDetailRow(
-                                              "Log ID", log["logId"]),
-                                          _buildDetailRow("User", userName),
-                                          _buildDetailRow(
-                                              "Barcode", log["barcode"]),
-                                          _buildDetailRow(
-                                              "Status", log["status"]),
-                                          _buildDetailRow(
-                                              "Device", log["deviceID"]),
-                                          _buildDetailRow(
-                                              "Timestamp",
-                                              formatTimestamp(
-                                                  log["timestamp"])),
-                                        ],
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context),
-                                          child: const Text("Close"),
-                                        ),
-                                      ],
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh, color: Colors.white),
+                          onPressed: () {
+                            loadUsers();
+                            loadLogs();
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Statistics Cards
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildMiniStatCard(
+                        "Entries",
+                        stats["totalEntries"]!,
+                        Colors.green,
+                        Icons.login,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMiniStatCard(
+                        "Exits",
+                        stats["totalExits"]!,
+                        Colors.orange,
+                        Icons.logout,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMiniStatCard(
+                        "Denied",
+                        stats["totalDenied"]!,
+                        Colors.red,
+                        Icons.block,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Filters
+              Container(
+                padding: const EdgeInsets.all(20),
+                color: Colors.grey.shade100,
+                child: Column(
+                  children: [
+                    // Status Filter
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildFilterChip("All", "all"),
+                          const SizedBox(width: 8),
+                          _buildFilterChip("Entry", "entry"),
+                          const SizedBox(width: 8),
+                          _buildFilterChip("Exit", "exit"),
+                          const SizedBox(width: 8),
+                          _buildFilterChip("Denied", "denied"),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Device & Date Filter
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: selectedDevice,
+                                isExpanded: true,
+                                style: GoogleFonts.poppins(
+                                  color: Colors.black87,
+                                  fontSize: 14,
+                                ),
+                                items: ["all", ...deviceIds].map((device) {
+                                  return DropdownMenuItem(
+                                    value: device,
+                                    child: Text(
+                                      device == "all" ? "All Devices" : device,
                                     ),
                                   );
+                                }).toList(),
+                                onChanged: (value) {
+                                  setState(() => selectedDevice = value!);
                                 },
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: () => selectDate(context),
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            selectedDate != null
+                                ? DateFormat('MMM dd').format(selectedDate!)
+                                : "Date",
+                            style: GoogleFonts.poppins(fontSize: 14),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.grey.shade800,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                        ),
+                        if (selectedDate != null) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: clearDateFilter,
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.red.shade600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Logs List
+              Expanded(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : filteredLogs.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.history,
+                                  size: 64,
+                                  color: Colors.grey.shade400,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  "No logs found",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filteredLogs.length,
+                            padding: const EdgeInsets.all(20),
+                            itemBuilder: (context, index) {
+                              final log = filteredLogs[index];
+                              final userName = getUserName(log["barcode"]);
+
+                              return Card(
+                                elevation: 2,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: InkWell(
+                                  onTap: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (_) =>
+                                          _buildLogDetailDialog(log, userName),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 56,
+                                          height: 56,
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                getStatusColor(log["status"])
+                                                    .withOpacity(0.7),
+                                                getStatusColor(log["status"]),
+                                              ],
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                          ),
+                                          child: Icon(
+                                            getStatusIcon(log["status"]),
+                                            color: Colors.white,
+                                            size: 28,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                userName,
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: getStatusColor(
+                                                              log["status"])
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              6),
+                                                    ),
+                                                    child: Text(
+                                                      log["status"]
+                                                          .toString()
+                                                          .toUpperCase(),
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: getStatusColor(
+                                                            log["status"]),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Icon(
+                                                    Icons.device_hub,
+                                                    size: 12,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    log["deviceID"],
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 12,
+                                                      color:
+                                                          Colors.grey.shade600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.access_time,
+                                                    size: 12,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    formatTimestamp(
+                                                        log["timestamp"]),
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 12,
+                                                      color:
+                                                          Colors.grey.shade600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.chevron_right,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              )
+                                  .animate()
+                                  .fadeIn(
+                                      delay: Duration(milliseconds: 50 * index))
+                                  .slideX(begin: 0.2, end: 0);
+                            },
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniStatCard(
+    String label,
+    int value,
+    Color color,
+    IconData icon,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.7), color],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.white, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value.toString(),
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              color: Colors.white.withOpacity(0.9),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(String label, int value, Color color) {
-    return Card(
-      elevation: 2,
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = selectedFilter == value;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) {
+        setState(() => selectedFilter = value);
+      },
+      labelStyle: GoogleFonts.poppins(
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        color: isSelected ? Colors.white : Colors.grey.shade700,
+      ),
+      backgroundColor: Colors.white,
+      selectedColor: Colors.orange.shade600,
+      checkmarkColor: Colors.white,
+    );
+  }
+
+  Widget _buildLogDetailDialog(Map<String, dynamic> log, String userName) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              value.toString(),
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: getStatusColor(log["status"]).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    getStatusIcon(log["status"]),
+                    color: getStatusColor(log["status"]),
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    "Log Details",
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12),
-              textAlign: TextAlign.center,
+            const SizedBox(height: 24),
+            _buildDetailRow("User", userName),
+            _buildDetailRow("Barcode", log["barcode"]),
+            _buildDetailRow("Status", log["status"].toString().toUpperCase()),
+            _buildDetailRow("Device", log["deviceID"]),
+            _buildDetailRow("Timestamp", formatTimestamp(log["timestamp"])),
+            _buildDetailRow("Log ID", log["logId"]),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  "Close",
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -471,7 +714,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -479,10 +722,20 @@ class _AllLogsPageState extends State<AllLogsPage> {
             width: 100,
             child: Text(
               "$label:",
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
             ),
           ),
-          Expanded(child: Text(value)),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.poppins(
+                color: Colors.grey.shade800,
+              ),
+            ),
+          ),
         ],
       ),
     );

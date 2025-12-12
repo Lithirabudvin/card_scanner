@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -46,12 +48,8 @@ class _DashboardPageState extends State<DashboardPage> {
         Map<String, String> mapping = {};
 
         data.forEach((barcodeId, value) {
-          if (value["isActive"] == true) {
-            active++;
-          }
-          if (value["access"] == "allowed") {
-            allowed++;
-          }
+          if (value["isActive"] == true) active++;
+          if (value["access"] == "allowed") allowed++;
           mapping[barcodeId] = value["name"] ?? "Unknown";
         });
 
@@ -78,10 +76,8 @@ class _DashboardPageState extends State<DashboardPage> {
         int denied = 0;
         List<Map<String, dynamic>> recent = [];
 
-        // Loop through all devices
         data.forEach((deviceId, deviceLogs) {
           if (deviceLogs is Map) {
-            // Loop through logs for this device
             deviceLogs.forEach((logId, logData) {
               try {
                 DateTime logDate = DateTime.parse(logData["timestamp"]);
@@ -100,14 +96,11 @@ class _DashboardPageState extends State<DashboardPage> {
                   "timestamp": logData["timestamp"] ?? "N/A",
                   "deviceID": logData["deviceID"] ?? deviceId,
                 });
-              } catch (e) {
-                // Skip invalid logs
-              }
+              } catch (e) {}
             });
           }
         });
 
-        // Sort and get top 5 recent logs
         recent.sort((a, b) {
           try {
             DateTime timeA = DateTime.parse(a["timestamp"]);
@@ -117,7 +110,7 @@ class _DashboardPageState extends State<DashboardPage> {
             return 0;
           }
         });
-        recent = recent.take(5).toList();
+        recent = recent.take(8).toList();
 
         if (mounted) {
           setState(() {
@@ -146,7 +139,7 @@ class _DashboardPageState extends State<DashboardPage> {
   String formatTimestamp(String timestamp) {
     try {
       DateTime dt = DateTime.parse(timestamp);
-      return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}";
+      return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (e) {
       return timestamp;
     }
@@ -173,213 +166,418 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Dashboard"),
-        elevation: 2,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: loadDashboardData,
+      backgroundColor: Colors.grey.shade50,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.indigo.shade700,
+              Colors.indigo.shade500,
+              Colors.white,
+            ],
+            stops: const [0.0, 0.2, 0.2],
           ),
-        ],
-      ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // System Status Card
-                  Card(
-                    elevation: 4,
-                    color: Colors.blue.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.security,
-                            size: 48,
-                            color: Colors.blue,
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Dashboard',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Text(
+                                'Real-time system overview',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh, color: Colors.white),
+                          onPressed: loadDashboardData,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Expanded(
+                child: isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // System Status Card
+                            Card(
+                              elevation: 4,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.blue.shade600,
+                                      Colors.blue.shade800,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: const Icon(
+                                        Icons.security,
+                                        size: 40,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 20),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Smart Door System",
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.greenAccent,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                "System Active • $totalUsers Users",
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.white
+                                                      .withOpacity(0.9),
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                                .animate()
+                                .fadeIn(delay: 100.ms)
+                                .slideY(begin: 0.1, end: 0),
+
+                            const SizedBox(height: 24),
+
+                            // User Statistics
+                            Text(
+                              "User Statistics",
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
                               children: [
-                                const Text(
-                                  "Smart Door System",
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
+                                Expanded(
+                                  child: _buildStatCard(
+                                    "Total Users",
+                                    totalUsers.toString(),
+                                    Icons.people,
+                                    [
+                                      Colors.blue.shade400,
+                                      Colors.blue.shade600
+                                    ],
+                                    200,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "System Active • $totalUsers Users Registered",
-                                  style: TextStyle(color: Colors.grey[700]),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    "Active",
+                                    activeUsers.toString(),
+                                    Icons.check_circle,
+                                    [
+                                      Colors.green.shade400,
+                                      Colors.green.shade600
+                                    ],
+                                    300,
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                            const SizedBox(height: 12),
+                            _buildStatCard(
+                              "Allowed Access",
+                              allowedUsers.toString(),
+                              Icons.verified_user,
+                              [Colors.teal.shade400, Colors.teal.shade600],
+                              400,
+                            ),
 
-                  const SizedBox(height: 20),
+                            const SizedBox(height: 24),
 
-                  // User Statistics
-                  const Text(
-                    "User Statistics",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          "Total Users",
-                          totalUsers.toString(),
-                          Icons.people,
-                          Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          "Active Users",
-                          activeUsers.toString(),
-                          Icons.check_circle,
-                          Colors.green,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          "Allowed",
-                          allowedUsers.toString(),
-                          Icons.verified_user,
-                          Colors.teal,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Today's Activity
-                  const Text(
-                    "Today's Activity",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          "Entries",
-                          todayEntries.toString(),
-                          Icons.login,
-                          Colors.green,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          "Exits",
-                          todayExits.toString(),
-                          Icons.logout,
-                          Colors.orange,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          "Denied",
-                          todayDenied.toString(),
-                          Icons.block,
-                          Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Recent Activity
-                  const Text(
-                    "Recent Activity",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-
-                  if (recentLogs.isEmpty)
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Center(
-                          child: Text("No recent activity"),
-                        ),
-                      ),
-                    )
-                  else
-                    ...recentLogs.map((log) => Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: getStatusColor(log["status"]),
-                              child: Icon(
-                                getStatusIcon(log["status"]),
-                                color: Colors.white,
-                                size: 20,
+                            // Today's Activity
+                            Text(
+                              "Today's Activity",
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            title: Text(
-                              getUserName(log["barcode"]),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildStatCard(
+                                    "Entries",
+                                    todayEntries.toString(),
+                                    Icons.login,
+                                    [
+                                      Colors.green.shade400,
+                                      Colors.green.shade600
+                                    ],
+                                    500,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    "Exits",
+                                    todayExits.toString(),
+                                    Icons.logout,
+                                    [
+                                      Colors.orange.shade400,
+                                      Colors.orange.shade600
+                                    ],
+                                    600,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    "Denied",
+                                    todayDenied.toString(),
+                                    Icons.block,
+                                    [Colors.red.shade400, Colors.red.shade600],
+                                    700,
+                                  ),
+                                ),
+                              ],
                             ),
-                            subtitle: Text(
-                              "${log["status"].toString().toUpperCase()} • ${log["deviceID"]} • ${formatTimestamp(log["timestamp"])}",
+
+                            const SizedBox(height: 24),
+
+                            // Recent Activity
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Recent Activity",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    // Navigate to all logs
+                                  },
+                                  child: Text(
+                                    "View All",
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.blue.shade600,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        )),
-                ],
+                            const SizedBox(height: 12),
+
+                            if (recentLogs.isEmpty)
+                              Card(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(32),
+                                  child: Center(
+                                    child: Column(
+                                      children: [
+                                        Icon(
+                                          Icons.history,
+                                          size: 48,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          "No recent activity",
+                                          style: GoogleFonts.poppins(
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              ...recentLogs.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final log = entry.value;
+                                return Card(
+                                  elevation: 1,
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    leading: Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color: getStatusColor(log["status"])
+                                            .withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        getStatusIcon(log["status"]),
+                                        color: getStatusColor(log["status"]),
+                                      ),
+                                    ),
+                                    title: Text(
+                                      getUserName(log["barcode"]),
+                                      style: GoogleFonts.poppins(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      "${log["status"].toString().toUpperCase()} • ${log["deviceID"]}",
+                                      style: GoogleFonts.poppins(fontSize: 12),
+                                    ),
+                                    trailing: Text(
+                                      formatTimestamp(log["timestamp"]),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                    .animate()
+                                    .fadeIn(
+                                        delay: Duration(
+                                            milliseconds: 800 + (index * 50)))
+                                    .slideX(begin: 0.2, end: 0);
+                              }),
+                          ],
+                        ),
+                      ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildStatCard(
-      String label, String value, IconData icon, Color color) {
+    String label,
+    String value,
+    IconData icon,
+    List<Color> gradient,
+    int delay,
+  ) {
     return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: gradient),
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: Column(
           children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
+            Icon(icon, size: 36, color: Colors.white),
+            const SizedBox(height: 12),
             Text(
               value,
-              style: TextStyle(
-                fontSize: 24,
+              style: GoogleFonts.poppins(
+                fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: color,
+                color: Colors.white,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(fontSize: 12),
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: Colors.white.withOpacity(0.9),
+              ),
               textAlign: TextAlign.center,
             ),
           ],
         ),
       ),
-    );
+    ).animate().fadeIn(delay: Duration(milliseconds: delay)).scale();
   }
 }
