@@ -15,12 +15,14 @@ class _AddUserPageState extends State<AddUserPage> {
   final database = FirebaseDatabase.instance.ref("users");
 
   String selectedRole = "employee";
+  String selectedAccess = "allowed";
   DateTime validFrom = DateTime.now();
   DateTime validUntil = DateTime.now().add(const Duration(days: 365));
   bool isActive = true;
   bool isLoading = false;
 
   final roles = ["employee", "visitor", "manager", "contractor"];
+  final accessLevels = ["allowed", "denied"];
 
   void saveUser() async {
     String name = nameController.text.trim();
@@ -33,16 +35,17 @@ class _AddUserPageState extends State<AddUserPage> {
     setState(() => isLoading = true);
 
     try {
+      // Generate unique barcode ID
       final uuid = const Uuid();
       String barcodeId = uuid.v4();
-      String userKey = database.push().key!;
 
-      await database.child(userKey).set({
+      // Store user with barcodeId as the key
+      await database.child(barcodeId).set({
         "name": name,
-        "barcodeId": barcodeId,
+        "role": selectedRole,
+        "access": selectedAccess,
         "validFrom": validFrom.toString().substring(0, 16),
         "validUntil": validUntil.toString().substring(0, 16),
-        "role": selectedRole,
         "isActive": isActive,
       });
 
@@ -59,6 +62,8 @@ class _AddUserPageState extends State<AddUserPage> {
               Text("Name: $name"),
               const SizedBox(height: 8),
               Text("Role: $selectedRole"),
+              const SizedBox(height: 8),
+              Text("Access: $selectedAccess"),
               const SizedBox(height: 8),
               const Text("Barcode ID:",
                   style: TextStyle(fontWeight: FontWeight.bold)),
@@ -90,6 +95,7 @@ class _AddUserPageState extends State<AddUserPage> {
       nameController.clear();
       setState(() {
         selectedRole = "employee";
+        selectedAccess = "allowed";
         validFrom = DateTime.now();
         validUntil = DateTime.now().add(const Duration(days: 365));
         isActive = true;
@@ -150,7 +156,7 @@ class _AddUserPageState extends State<AddUserPage> {
             DropdownButtonFormField<String>(
               value: selectedRole,
               decoration: const InputDecoration(
-                labelText: "Role / Access Level",
+                labelText: "Role",
                 prefixIcon: Icon(Icons.badge),
                 border: OutlineInputBorder(),
               ),
@@ -162,6 +168,24 @@ class _AddUserPageState extends State<AddUserPage> {
               }).toList(),
               onChanged: (value) {
                 setState(() => selectedRole = value!);
+              },
+            ),
+            const SizedBox(height: 20),
+            DropdownButtonFormField<String>(
+              value: selectedAccess,
+              decoration: const InputDecoration(
+                labelText: "Access Level",
+                prefixIcon: Icon(Icons.security),
+                border: OutlineInputBorder(),
+              ),
+              items: accessLevels.map((access) {
+                return DropdownMenuItem(
+                  value: access,
+                  child: Text(access.toUpperCase()),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() => selectedAccess = value!);
               },
             ),
             const SizedBox(height: 20),

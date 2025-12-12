@@ -29,12 +29,12 @@ class _UsersListPageState extends State<UsersListPage> {
 
       if (data != null) {
         List<Map<String, dynamic>> loadedUsers = [];
-        data.forEach((key, value) {
+        data.forEach((barcodeId, value) {
           loadedUsers.add({
-            "userId": key,
+            "barcodeId": barcodeId,
             "name": value["name"] ?? "N/A",
-            "barcodeId": value["barcodeId"] ?? "N/A",
             "role": value["role"] ?? "N/A",
+            "access": value["access"] ?? "allowed",
             "validFrom": value["validFrom"] ?? "N/A",
             "validUntil": value["validUntil"] ?? "N/A",
             "isActive": value["isActive"] ?? false,
@@ -61,7 +61,7 @@ class _UsersListPageState extends State<UsersListPage> {
     });
   }
 
-  void deleteUser(String userId, String userName) async {
+  void deleteUser(String barcodeId, String userName) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -82,7 +82,7 @@ class _UsersListPageState extends State<UsersListPage> {
     );
 
     if (confirm == true) {
-      await database.child(userId).remove();
+      await database.child(barcodeId).remove();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("User deleted successfully")),
@@ -91,8 +91,13 @@ class _UsersListPageState extends State<UsersListPage> {
     }
   }
 
-  void toggleUserStatus(String userId, bool currentStatus) async {
-    await database.child(userId).update({"isActive": !currentStatus});
+  void toggleUserStatus(String barcodeId, bool currentStatus) async {
+    await database.child(barcodeId).update({"isActive": !currentStatus});
+  }
+
+  void toggleUserAccess(String barcodeId, String currentAccess) async {
+    String newAccess = currentAccess == "allowed" ? "denied" : "allowed";
+    await database.child(barcodeId).update({"access": newAccess});
   }
 
   @override
@@ -120,13 +125,16 @@ class _UsersListPageState extends State<UsersListPage> {
                   padding: const EdgeInsets.all(8),
                   itemBuilder: (context, index) {
                     final user = users[index];
+                    final isAllowed = user["access"] == "allowed";
+
                     return Card(
                       margin: const EdgeInsets.symmetric(
                           vertical: 4, horizontal: 8),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor:
-                              user["isActive"] ? Colors.green : Colors.grey,
+                          backgroundColor: user["isActive"] && isAllowed
+                              ? Colors.green
+                              : Colors.grey,
                           child: Text(
                             user["name"][0].toUpperCase(),
                             style: const TextStyle(color: Colors.white),
@@ -137,7 +145,7 @@ class _UsersListPageState extends State<UsersListPage> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          "${user["role"].toString().toUpperCase()} • ${user["isActive"] ? "Active" : "Inactive"}",
+                          "${user["role"].toString().toUpperCase()} • ${user["access"].toString().toUpperCase()} • ${user["isActive"] ? "Active" : "Inactive"}",
                         ),
                         trailing: PopupMenuButton(
                           itemBuilder: (context) => [
@@ -152,12 +160,26 @@ class _UsersListPageState extends State<UsersListPage> {
                               ),
                             ),
                             PopupMenuItem(
+                              value: "toggle_access",
+                              child: Row(
+                                children: [
+                                  Icon(isAllowed
+                                      ? Icons.block
+                                      : Icons.check_circle),
+                                  const SizedBox(width: 8),
+                                  Text(isAllowed
+                                      ? "Deny Access"
+                                      : "Allow Access"),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
                               value: "toggle",
                               child: Row(
                                 children: [
                                   Icon(user["isActive"]
-                                      ? Icons.block
-                                      : Icons.check_circle),
+                                      ? Icons.person_off
+                                      : Icons.person),
                                   const SizedBox(width: 8),
                                   Text(user["isActive"]
                                       ? "Deactivate"
@@ -185,11 +207,14 @@ class _UsersListPageState extends State<UsersListPage> {
                                   builder: (_) => UserDetailsPage(user: user),
                                 ),
                               );
+                            } else if (value == "toggle_access") {
+                              toggleUserAccess(
+                                  user["barcodeId"], user["access"]);
                             } else if (value == "toggle") {
                               toggleUserStatus(
-                                  user["userId"], user["isActive"]);
+                                  user["barcodeId"], user["isActive"]);
                             } else if (value == "delete") {
-                              deleteUser(user["userId"], user["name"]);
+                              deleteUser(user["barcodeId"], user["name"]);
                             }
                           },
                         ),

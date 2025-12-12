@@ -12,12 +12,15 @@ class UserDetailsPage extends StatefulWidget {
 }
 
 class _UserDetailsPageState extends State<UserDetailsPage> {
-  final logsDb = FirebaseDatabase.instance.ref("door_logs");
+  final logsDb = FirebaseDatabase.instance.ref("logs");
   List<Map<String, dynamic>> userLogs = [];
   bool isLoading = true;
 
   String selectedFilter = "all";
+  String selectedDevice = "all";
   DateTime? selectedDate;
+
+  Set<String> deviceIds = {};
 
   @override
   void initState() {
@@ -33,29 +36,44 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
 
       if (data != null) {
         List<Map<String, dynamic>> loaded = [];
+        Set<String> devices = {};
 
-        data.forEach((key, value) {
-          if (value["userId"] == widget.user["userId"]) {
-            loaded.add({
-              "logId": key,
-              "userId": value["userId"] ?? "N/A",
-              "userName": value["userName"] ?? "N/A",
-              "barcodeId": value["barcodeId"] ?? "N/A",
-              "timestamp": value["timestamp"] ?? 0,
-              "event": value["event"] ?? "N/A",
-              "date": value["date"] ?? "N/A",
-              "time": value["time"] ?? "N/A",
-              "status": value["status"] ?? "N/A",
+        // Loop through all devices
+        data.forEach((deviceId, deviceLogs) {
+          devices.add(deviceId);
+
+          if (deviceLogs is Map) {
+            // Loop through logs for this device
+            deviceLogs.forEach((logId, logData) {
+              // Check if this log belongs to current user
+              if (logData["barcode"] == widget.user["barcodeId"]) {
+                loaded.add({
+                  "logId": logId,
+                  "barcode": logData["barcode"] ?? "N/A",
+                  "timestamp": logData["timestamp"] ?? "N/A",
+                  "status": logData["status"] ?? "N/A",
+                  "deviceID": logData["deviceID"] ?? deviceId,
+                });
+              }
             });
           }
         });
 
         // Sort by timestamp (most recent first)
-        loaded.sort((a, b) => b["timestamp"].compareTo(a["timestamp"]));
+        loaded.sort((a, b) {
+          try {
+            DateTime timeA = DateTime.parse(a["timestamp"]);
+            DateTime timeB = DateTime.parse(b["timestamp"]);
+            return timeB.compareTo(timeA);
+          } catch (e) {
+            return 0;
+          }
+        });
 
         if (mounted) {
           setState(() {
             userLogs = loaded;
+            deviceIds = devices;
             isLoading = false;
           });
         }
@@ -73,18 +91,33 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
   List<Map<String, dynamic>> getFilteredLogs() {
     List<Map<String, dynamic>> filtered = userLogs;
 
-    // Filter by event type
-    if (selectedFilter == "entrance") {
-      filtered = filtered.where((log) => log["event"] == "entrance").toList();
+    // Filter by status
+    if (selectedFilter == "entry") {
+      filtered = filtered.where((log) => log["status"] == "entry").toList();
     } else if (selectedFilter == "exit") {
-      filtered = filtered.where((log) => log["event"] == "exit").toList();
+      filtered = filtered.where((log) => log["status"] == "exit").toList();
+    } else if (selectedFilter == "denied") {
+      filtered = filtered.where((log) => log["status"] == "denied").toList();
+    }
+
+    // Filter by device
+    if (selectedDevice != "all") {
+      filtered =
+          filtered.where((log) => log["deviceID"] == selectedDevice).toList();
     }
 
     // Filter by date
     if (selectedDate != null) {
-      String dateStr =
-          "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
-      filtered = filtered.where((log) => log["date"] == dateStr).toList();
+      filtered = filtered.where((log) {
+        try {
+          DateTime logDate = DateTime.parse(log["timestamp"]);
+          return logDate.year == selectedDate!.year &&
+              logDate.month == selectedDate!.month &&
+              logDate.day == selectedDate!.day;
+        } catch (e) {
+          return false;
+        }
+      }).toList();
     }
 
     return filtered;
@@ -111,33 +144,39 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
     });
   }
 
-  String formatTimestamp(int timestamp) {
-    if (timestamp == 0) return "N/A";
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} "
-        "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}";
+  String formatTimestamp(String timestamp) {
+    try {
+      DateTime dt = DateTime.parse(timestamp);
+      return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} "
+          "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}";
+    } catch (e) {
+      return timestamp;
+    }
   }
 
-  IconData getEventIcon(String event) {
-    if (event == "entrance") return Icons.login;
-    if (event == "exit") return Icons.logout;
+  IconData getStatusIcon(String status) {
+    if (status == "entry") return Icons.login;
+    if (status == "exit") return Icons.logout;
+    if (status == "denied") return Icons.block;
     return Icons.event;
   }
 
-  Color getEventColor(String event) {
-    if (event == "entrance") return Colors.green;
-    if (event == "exit") return Colors.orange;
+  Color getStatusColor(String status) {
+    if (status == "entry") return Colors.green;
+    if (status == "exit") return Colors.orange;
+    if (status == "denied") return Colors.red;
     return Colors.grey;
   }
 
   Map<String, int> getStatistics() {
-    int totalEntries =
-        userLogs.where((log) => log["event"] == "entrance").length;
-    int totalExits = userLogs.where((log) => log["event"] == "exit").length;
+    int totalEntries = userLogs.where((log) => log["status"] == "entry").length;
+    int totalExits = userLogs.where((log) => log["status"] == "exit").length;
+    int totalDenied = userLogs.where((log) => log["status"] == "denied").length;
 
     return {
       "totalEntries": totalEntries,
       "totalExits": totalExits,
+      "totalDenied": totalDenied,
       "totalLogs": userLogs.length,
     };
   }
@@ -146,6 +185,7 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
   Widget build(BuildContext context) {
     final stats = getStatistics();
     final filteredLogs = getFilteredLogs();
+    final isAllowed = widget.user["access"] == "allowed";
 
     return Scaffold(
       appBar: AppBar(
@@ -166,7 +206,7 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: widget.user["isActive"]
+                        backgroundColor: widget.user["isActive"] && isAllowed
                             ? Colors.green
                             : Colors.grey,
                         radius: 30,
@@ -193,18 +233,29 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
                           ],
                         ),
                       ),
-                      Chip(
-                        label: Text(
-                            widget.user["isActive"] ? "Active" : "Inactive"),
-                        backgroundColor: widget.user["isActive"]
-                            ? Colors.green.shade100
-                            : Colors.grey.shade300,
+                      Column(
+                        children: [
+                          Chip(
+                            label: Text(
+                                widget.user["access"].toString().toUpperCase()),
+                            backgroundColor: isAllowed
+                                ? Colors.green.shade100
+                                : Colors.red.shade100,
+                          ),
+                          const SizedBox(height: 4),
+                          Chip(
+                            label: Text(widget.user["isActive"]
+                                ? "Active"
+                                : "Inactive"),
+                            backgroundColor: widget.user["isActive"]
+                                ? Colors.blue.shade100
+                                : Colors.grey.shade300,
+                          ),
+                        ],
                       ),
                     ],
                   ),
                   const Divider(height: 24),
-                  _buildInfoRow("User ID", widget.user["userId"]),
-                  const SizedBox(height: 8),
                   _buildInfoRow("Valid From", widget.user["validFrom"]),
                   const SizedBox(height: 8),
                   _buildInfoRow("Valid Until", widget.user["validUntil"]),
@@ -245,17 +296,17 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
               children: [
                 Expanded(
                   child: _buildStatCard(
-                      "Total Entries", stats["totalEntries"]!, Colors.green),
+                      "Entries", stats["totalEntries"]!, Colors.green),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _buildStatCard(
-                      "Total Exits", stats["totalExits"]!, Colors.orange),
+                      "Exits", stats["totalExits"]!, Colors.orange),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _buildStatCard(
-                      "Total Logs", stats["totalLogs"]!, Colors.blue),
+                      "Denied", stats["totalDenied"]!, Colors.red),
                 ),
               ],
             ),
@@ -269,32 +320,76 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
             color: Colors.grey[100],
             child: Column(
               children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const Text("Status: ",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text("All"),
+                        selected: selectedFilter == "all",
+                        onSelected: (_) =>
+                            setState(() => selectedFilter = "all"),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text("Entry"),
+                        selected: selectedFilter == "entry",
+                        onSelected: (_) =>
+                            setState(() => selectedFilter = "entry"),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text("Exit"),
+                        selected: selectedFilter == "exit",
+                        onSelected: (_) =>
+                            setState(() => selectedFilter = "exit"),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text("Denied"),
+                        selected: selectedFilter == "denied",
+                        onSelected: (_) =>
+                            setState(() => selectedFilter = "denied"),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Text("Filter: ",
+                    const Text("Device: ",
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text("All"),
-                      selected: selectedFilter == "all",
-                      onSelected: (_) => setState(() => selectedFilter = "all"),
-                    ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text("Entrance"),
-                      selected: selectedFilter == "entrance",
-                      onSelected: (_) =>
-                          setState(() => selectedFilter = "entrance"),
-                    ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text("Exit"),
-                      selected: selectedFilter == "exit",
-                      onSelected: (_) =>
-                          setState(() => selectedFilter = "exit"),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            ChoiceChip(
+                              label: const Text("All"),
+                              selected: selectedDevice == "all",
+                              onSelected: (_) =>
+                                  setState(() => selectedDevice = "all"),
+                            ),
+                            ...deviceIds.map((deviceId) => Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: ChoiceChip(
+                                    label: Text(deviceId),
+                                    selected: selectedDevice == deviceId,
+                                    onSelected: (_) => setState(
+                                        () => selectedDevice = deviceId),
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     const Text("Date: ",
@@ -343,15 +438,15 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
                                 vertical: 4, horizontal: 8),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: getEventColor(log["event"]),
+                                backgroundColor: getStatusColor(log["status"]),
                                 child: Icon(
-                                  getEventIcon(log["event"]),
+                                  getStatusIcon(log["status"]),
                                   color: Colors.white,
                                   size: 20,
                                 ),
                               ),
                               title: Text(
-                                log["event"].toString().toUpperCase(),
+                                log["status"].toString().toUpperCase(),
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold),
                               ),
@@ -359,10 +454,9 @@ class _UserDetailsPageState extends State<UserDetailsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const SizedBox(height: 4),
+                                  Text("Device: ${log["deviceID"]}"),
                                   Text(
-                                      "Date: ${log["date"]} at ${log["time"]}"),
-                                  Text(
-                                      "Timestamp: ${formatTimestamp(log["timestamp"])}"),
+                                      "Time: ${formatTimestamp(log["timestamp"])}"),
                                 ],
                               ),
                               isThreeLine: true,

@@ -9,17 +9,43 @@ class AllLogsPage extends StatefulWidget {
 }
 
 class _AllLogsPageState extends State<AllLogsPage> {
-  final logsDb = FirebaseDatabase.instance.ref("door_logs");
+  final logsDb = FirebaseDatabase.instance.ref("logs");
+  final usersDb = FirebaseDatabase.instance.ref("users");
+
   List<Map<String, dynamic>> logs = [];
+  Map<String, String> barcodeToName = {};
   bool isLoading = true;
 
   String selectedFilter = "all";
+  String selectedDevice = "all";
   DateTime? selectedDate;
+
+  Set<String> deviceIds = {};
 
   @override
   void initState() {
     super.initState();
+    loadUsers();
     loadLogs();
+  }
+
+  void loadUsers() async {
+    usersDb.onValue.listen((event) {
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+
+      if (data != null) {
+        Map<String, String> mapping = {};
+        data.forEach((barcodeId, userData) {
+          mapping[barcodeId] = userData["name"] ?? "Unknown";
+        });
+
+        if (mounted) {
+          setState(() {
+            barcodeToName = mapping;
+          });
+        }
+      }
+    });
   }
 
   void loadLogs() async {
@@ -30,27 +56,41 @@ class _AllLogsPageState extends State<AllLogsPage> {
 
       if (data != null) {
         List<Map<String, dynamic>> loaded = [];
+        Set<String> devices = {};
 
-        data.forEach((key, value) {
-          loaded.add({
-            "logId": key,
-            "userId": value["userId"] ?? "N/A",
-            "userName": value["userName"] ?? "N/A",
-            "barcodeId": value["barcodeId"] ?? "N/A",
-            "timestamp": value["timestamp"] ?? 0,
-            "event": value["event"] ?? "N/A",
-            "date": value["date"] ?? "N/A",
-            "time": value["time"] ?? "N/A",
-            "status": value["status"] ?? "N/A",
-          });
+        // Loop through all devices
+        data.forEach((deviceId, deviceLogs) {
+          devices.add(deviceId);
+
+          if (deviceLogs is Map) {
+            // Loop through logs for this device
+            deviceLogs.forEach((logId, logData) {
+              loaded.add({
+                "logId": logId,
+                "barcode": logData["barcode"] ?? "N/A",
+                "timestamp": logData["timestamp"] ?? "N/A",
+                "status": logData["status"] ?? "N/A",
+                "deviceID": logData["deviceID"] ?? deviceId,
+              });
+            });
+          }
         });
 
         // Sort by timestamp (most recent first)
-        loaded.sort((a, b) => b["timestamp"].compareTo(a["timestamp"]));
+        loaded.sort((a, b) {
+          try {
+            DateTime timeA = DateTime.parse(a["timestamp"]);
+            DateTime timeB = DateTime.parse(b["timestamp"]);
+            return timeB.compareTo(timeA);
+          } catch (e) {
+            return 0;
+          }
+        });
 
         if (mounted) {
           setState(() {
             logs = loaded;
+            deviceIds = devices;
             isLoading = false;
           });
         }
@@ -68,21 +108,33 @@ class _AllLogsPageState extends State<AllLogsPage> {
   List<Map<String, dynamic>> getFilteredLogs() {
     List<Map<String, dynamic>> filtered = logs;
 
-    // Filter by event type
-    if (selectedFilter == "entrance") {
-      filtered = filtered.where((log) => log["event"] == "entrance").toList();
+    // Filter by status
+    if (selectedFilter == "entry") {
+      filtered = filtered.where((log) => log["status"] == "entry").toList();
     } else if (selectedFilter == "exit") {
-      filtered = filtered.where((log) => log["event"] == "exit").toList();
+      filtered = filtered.where((log) => log["status"] == "exit").toList();
     } else if (selectedFilter == "denied") {
+      filtered = filtered.where((log) => log["status"] == "denied").toList();
+    }
+
+    // Filter by device
+    if (selectedDevice != "all") {
       filtered =
-          filtered.where((log) => log["event"] == "access_denied").toList();
+          filtered.where((log) => log["deviceID"] == selectedDevice).toList();
     }
 
     // Filter by date
     if (selectedDate != null) {
-      String dateStr =
-          "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
-      filtered = filtered.where((log) => log["date"] == dateStr).toList();
+      filtered = filtered.where((log) {
+        try {
+          DateTime logDate = DateTime.parse(log["timestamp"]);
+          return logDate.year == selectedDate!.year &&
+              logDate.month == selectedDate!.month &&
+              logDate.day == selectedDate!.day;
+        } catch (e) {
+          return false;
+        }
+      }).toList();
     }
 
     return filtered;
@@ -109,32 +161,38 @@ class _AllLogsPageState extends State<AllLogsPage> {
     });
   }
 
-  String formatTimestamp(int timestamp) {
-    if (timestamp == 0) return "N/A";
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} "
-        "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}";
+  String formatTimestamp(String timestamp) {
+    try {
+      DateTime dt = DateTime.parse(timestamp);
+      return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} "
+          "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}";
+    } catch (e) {
+      return timestamp;
+    }
   }
 
-  IconData getEventIcon(String event) {
-    if (event == "entrance") return Icons.login;
-    if (event == "exit") return Icons.logout;
-    if (event == "access_denied") return Icons.block;
+  String getUserName(String barcode) {
+    return barcodeToName[barcode] ?? "Unknown User";
+  }
+
+  IconData getStatusIcon(String status) {
+    if (status == "entry") return Icons.login;
+    if (status == "exit") return Icons.logout;
+    if (status == "denied") return Icons.block;
     return Icons.event;
   }
 
-  Color getEventColor(String event) {
-    if (event == "entrance") return Colors.green;
-    if (event == "exit") return Colors.orange;
-    if (event == "access_denied") return Colors.red;
+  Color getStatusColor(String status) {
+    if (status == "entry") return Colors.green;
+    if (status == "exit") return Colors.orange;
+    if (status == "denied") return Colors.red;
     return Colors.grey;
   }
 
   Map<String, int> getStatistics() {
-    int totalEntries = logs.where((log) => log["event"] == "entrance").length;
-    int totalExits = logs.where((log) => log["event"] == "exit").length;
-    int totalDenied =
-        logs.where((log) => log["event"] == "access_denied").length;
+    int totalEntries = logs.where((log) => log["status"] == "entry").length;
+    int totalExits = logs.where((log) => log["status"] == "exit").length;
+    int totalDenied = logs.where((log) => log["status"] == "denied").length;
 
     return {
       "totalEntries": totalEntries,
@@ -156,7 +214,10 @@ class _AllLogsPageState extends State<AllLogsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: loadLogs,
+            onPressed: () {
+              loadUsers();
+              loadLogs();
+            },
           ),
         ],
       ),
@@ -195,7 +256,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      const Text("Filter: ",
+                      const Text("Status: ",
                           style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(width: 8),
                       ChoiceChip(
@@ -206,10 +267,10 @@ class _AllLogsPageState extends State<AllLogsPage> {
                       ),
                       const SizedBox(width: 8),
                       ChoiceChip(
-                        label: const Text("Entrance"),
-                        selected: selectedFilter == "entrance",
+                        label: const Text("Entry"),
+                        selected: selectedFilter == "entry",
                         onSelected: (_) =>
-                            setState(() => selectedFilter = "entrance"),
+                            setState(() => selectedFilter = "entry"),
                       ),
                       const SizedBox(width: 8),
                       ChoiceChip(
@@ -227,6 +288,38 @@ class _AllLogsPageState extends State<AllLogsPage> {
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text("Device: ",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            ChoiceChip(
+                              label: const Text("All"),
+                              selected: selectedDevice == "all",
+                              onSelected: (_) =>
+                                  setState(() => selectedDevice = "all"),
+                            ),
+                            ...deviceIds.map((deviceId) => Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: ChoiceChip(
+                                    label: Text(deviceId),
+                                    selected: selectedDevice == deviceId,
+                                    onSelected: (_) => setState(
+                                        () => selectedDevice = deviceId),
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -272,20 +365,22 @@ class _AllLogsPageState extends State<AllLogsPage> {
                         padding: const EdgeInsets.all(8),
                         itemBuilder: (context, index) {
                           final log = filteredLogs[index];
+                          final userName = getUserName(log["barcode"]);
+
                           return Card(
                             margin: const EdgeInsets.symmetric(
                                 vertical: 4, horizontal: 8),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: getEventColor(log["event"]),
+                                backgroundColor: getStatusColor(log["status"]),
                                 child: Icon(
-                                  getEventIcon(log["event"]),
+                                  getStatusIcon(log["status"]),
                                   color: Colors.white,
                                   size: 20,
                                 ),
                               ),
                               title: Text(
-                                "${log["event"].toString().toUpperCase().replaceAll("_", " ")} - ${log["userName"]}",
+                                "${log["status"].toString().toUpperCase()} - $userName",
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold),
                               ),
@@ -293,11 +388,9 @@ class _AllLogsPageState extends State<AllLogsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const SizedBox(height: 4),
+                                  Text("Device: ${log["deviceID"]}"),
                                   Text(
-                                      "Date: ${log["date"]} at ${log["time"]}"),
-                                  if (log["event"] == "access_denied")
-                                    Text(
-                                        "Barcode: ${log["barcodeId"].length > 20 ? log["barcodeId"].substring(0, 20) + "..." : log["barcodeId"]}"),
+                                      "Time: ${formatTimestamp(log["timestamp"])}"),
                                 ],
                               ),
                               isThreeLine: true,
@@ -315,20 +408,15 @@ class _AllLogsPageState extends State<AllLogsPage> {
                                         children: [
                                           _buildDetailRow(
                                               "Log ID", log["logId"]),
+                                          _buildDetailRow("User", userName),
                                           _buildDetailRow(
-                                              "User", log["userName"]),
-                                          _buildDetailRow(
-                                              "User ID", log["userId"]),
-                                          _buildDetailRow(
-                                              "Barcode ID", log["barcodeId"]),
-                                          _buildDetailRow(
-                                              "Event", log["event"]),
-                                          _buildDetailRow("Date", log["date"]),
-                                          _buildDetailRow("Time", log["time"]),
+                                              "Barcode", log["barcode"]),
                                           _buildDetailRow(
                                               "Status", log["status"]),
                                           _buildDetailRow(
-                                              "Full Timestamp",
+                                              "Device", log["deviceID"]),
+                                          _buildDetailRow(
+                                              "Timestamp",
                                               formatTimestamp(
                                                   log["timestamp"])),
                                         ],
