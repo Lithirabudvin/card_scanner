@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'add_user_page.dart';
 import 'users_list_page.dart';
-import 'logs_page.dart';
-import 'access_requests_page.dart';
-import 'attendance_page.dart';
+import 'all_logs_page.dart';
+import 'dashboard_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -23,6 +22,16 @@ class HomePage extends StatelessWidget {
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           children: [
+            _buildDashboardCard(
+              context,
+              title: "Dashboard",
+              icon: Icons.dashboard,
+              color: Colors.indigo,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DashboardPage()),
+              ),
+            ),
             _buildDashboardCard(
               context,
               title: "Add User",
@@ -45,32 +54,12 @@ class HomePage extends StatelessWidget {
             ),
             _buildDashboardCard(
               context,
-              title: "Attendance",
-              icon: Icons.access_time,
-              color: Colors.teal,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AttendancePage()),
-              ),
-            ),
-            _buildDashboardCard(
-              context,
-              title: "Access Logs",
+              title: "All Door Logs",
               icon: Icons.history,
               color: Colors.orange,
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const LogsPage()),
-              ),
-            ),
-            _buildDashboardCard(
-              context,
-              title: "Pending Requests",
-              icon: Icons.pending_actions,
-              color: Colors.purple,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AccessRequestsPage()),
+                MaterialPageRoute(builder: (_) => const AllLogsPage()),
               ),
             ),
           ],

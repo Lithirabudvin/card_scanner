@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/services.dart';
+import 'user_details_page.dart';
 
 class UsersListPage extends StatefulWidget {
   const UsersListPage({super.key});
@@ -39,6 +40,9 @@ class _UsersListPageState extends State<UsersListPage> {
             "isActive": value["isActive"] ?? false,
           });
         });
+
+        // Sort by name
+        loadedUsers.sort((a, b) => a["name"].compareTo(b["name"]));
 
         if (mounted) {
           setState(() {
@@ -89,74 +93,6 @@ class _UsersListPageState extends State<UsersListPage> {
 
   void toggleUserStatus(String userId, bool currentStatus) async {
     await database.child(userId).update({"isActive": !currentStatus});
-  }
-
-  void showUserDetails(Map<String, dynamic> user) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(user["name"]),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDetailRow("User ID", user["userId"]),
-              _buildDetailRow("Role", user["role"].toString().toUpperCase()),
-              _buildDetailRow(
-                  "Status", user["isActive"] ? "Active" : "Inactive"),
-              const Divider(),
-              const Text("Barcode ID:",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              SelectableText(
-                user["barcodeId"],
-                style: const TextStyle(fontSize: 12, color: Colors.blue),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.copy, size: 16),
-                label: const Text("Copy"),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: user["barcodeId"]));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Barcode ID copied")),
-                  );
-                },
-              ),
-              const Divider(),
-              _buildDetailRow("Valid From", user["validFrom"]),
-              _buildDetailRow("Valid Until", user["validUntil"]),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              "$label:",
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
   }
 
   @override
@@ -211,7 +147,7 @@ class _UsersListPageState extends State<UsersListPage> {
                                 children: [
                                   Icon(Icons.info_outline),
                                   SizedBox(width: 8),
-                                  Text("View Details"),
+                                  Text("View Details & Logs"),
                                 ],
                               ),
                             ),
@@ -243,7 +179,12 @@ class _UsersListPageState extends State<UsersListPage> {
                           ],
                           onSelected: (value) {
                             if (value == "view") {
-                              showUserDetails(user);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => UserDetailsPage(user: user),
+                                ),
+                              );
                             } else if (value == "toggle") {
                               toggleUserStatus(
                                   user["userId"], user["isActive"]);
@@ -252,7 +193,12 @@ class _UsersListPageState extends State<UsersListPage> {
                             }
                           },
                         ),
-                        onTap: () => showUserDetails(user),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserDetailsPage(user: user),
+                          ),
+                        ),
                       ),
                     );
                   },
