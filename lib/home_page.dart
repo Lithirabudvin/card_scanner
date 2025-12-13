@@ -273,24 +273,6 @@ class HomePage extends StatelessWidget {
                         ),
                         delay: 700,
                       ),
-                      _buildMenuCard(
-                        context,
-                        title: "Reports",
-                        icon: Icons.bar_chart_rounded,
-                        gradient: [Colors.pink.shade400, Colors.pink.shade700],
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Reports feature coming soon!',
-                                style: GoogleFonts.poppins(),
-                              ),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
-                        delay: 800,
-                      ),
                     ],
                   ),
                 ),

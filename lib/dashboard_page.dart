@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'all_logs_page.dart';
+import 'attendance_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -14,15 +16,24 @@ class _DashboardPageState extends State<DashboardPage> {
   final usersDb = FirebaseDatabase.instance.ref("users");
   final logsDb = FirebaseDatabase.instance.ref("logs");
 
+  // User statistics
   int totalUsers = 0;
   int activeUsers = 0;
   int allowedUsers = 0;
+
+  // Today's activity
   int todayEntries = 0;
   int todayExits = 0;
   int todayDenied = 0;
 
+  // Current inside (calculated from logs)
+  int currentlyInside = 0;
+  Map<String, int> insidePerGate = {};
+
+  // Recent activity
   Map<String, String> barcodeToName = {};
   List<Map<String, dynamic>> recentLogs = [];
+
   bool isLoading = true;
 
   @override
@@ -74,8 +85,10 @@ class _DashboardPageState extends State<DashboardPage> {
         int entries = 0;
         int exits = 0;
         int denied = 0;
+        List<Map<String, dynamic>> allLogs = [];
         List<Map<String, dynamic>> recent = [];
 
+        // Collect all logs
         data.forEach((deviceId, deviceLogs) {
           if (deviceLogs is Map) {
             deviceLogs.forEach((logId, logData) {
@@ -84,23 +97,37 @@ class _DashboardPageState extends State<DashboardPage> {
                 String logDateStr =
                     "${logDate.year}-${logDate.month.toString().padLeft(2, '0')}-${logDate.day.toString().padLeft(2, '0')}";
 
+                // Count today's activity
                 if (logDateStr == todayStr) {
                   if (logData["status"] == "entry") entries++;
                   if (logData["status"] == "exit") exits++;
                   if (logData["status"] == "denied") denied++;
                 }
 
+                // Collect for recent activity
                 recent.add({
                   "barcode": logData["barcode"] ?? "N/A",
                   "status": logData["status"] ?? "N/A",
                   "timestamp": logData["timestamp"] ?? "N/A",
                   "deviceID": logData["deviceID"] ?? deviceId,
                 });
+
+                // Collect for current inside calculation
+                if (logData["status"] == "entry" ||
+                    logData["status"] == "exit") {
+                  allLogs.add({
+                    "barcode": logData["barcode"] ?? "N/A",
+                    "status": logData["status"] ?? "N/A",
+                    "timestamp": logData["timestamp"] ?? "N/A",
+                    "deviceID": logData["deviceID"] ?? deviceId,
+                  });
+                }
               } catch (e) {}
             });
           }
         });
 
+        // Sort recent logs
         recent.sort((a, b) {
           try {
             DateTime timeA = DateTime.parse(a["timestamp"]);
@@ -111,6 +138,9 @@ class _DashboardPageState extends State<DashboardPage> {
           }
         });
         recent = recent.take(8).toList();
+
+        // Calculate current inside
+        _calculateCurrentInside(allLogs);
 
         if (mounted) {
           setState(() {
@@ -128,6 +158,57 @@ class _DashboardPageState extends State<DashboardPage> {
           });
         }
       }
+    });
+  }
+
+  void _calculateCurrentInside(List<Map<String, dynamic>> allLogs) {
+    // Sort by timestamp
+    allLogs.sort((a, b) {
+      try {
+        DateTime timeA = DateTime.parse(a["timestamp"]);
+        DateTime timeB = DateTime.parse(b["timestamp"]);
+        return timeA.compareTo(timeB);
+      } catch (e) {
+        return 0;
+      }
+    });
+
+    // Track who's inside per gate
+    Map<String, Set<String>> insideByGate = {};
+    Map<String, String> lastStatusByUserGate = {};
+
+    for (var log in allLogs) {
+      String barcode = log["barcode"];
+      String deviceId = log["deviceID"];
+      String status = log["status"];
+      String key = "$barcode-$deviceId";
+
+      if (status == "entry") {
+        if (!insideByGate.containsKey(deviceId)) {
+          insideByGate[deviceId] = {};
+        }
+        insideByGate[deviceId]!.add(barcode);
+        lastStatusByUserGate[key] = "entry";
+      } else if (status == "exit") {
+        if (insideByGate.containsKey(deviceId)) {
+          insideByGate[deviceId]!.remove(barcode);
+        }
+        lastStatusByUserGate[key] = "exit";
+      }
+    }
+
+    // Count total and per-gate
+    int total = 0;
+    Map<String, int> perGate = {};
+
+    insideByGate.forEach((gate, people) {
+      total += people.length;
+      perGate[gate] = people.length;
+    });
+
+    setState(() {
+      currentlyInside = total;
+      insidePerGate = perGate;
     });
   }
 
@@ -209,7 +290,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 ),
                               ),
                               Text(
-                                'Real-time system overview',
+                                'System Overview',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   color: Colors.white.withOpacity(0.9),
@@ -319,6 +400,148 @@ class _DashboardPageState extends State<DashboardPage> {
 
                             const SizedBox(height: 24),
 
+                            // Currently Inside Section
+                            Text(
+                              "Currently Inside",
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            Card(
+                              elevation: 3,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const AttendancePage(),
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Colors.green.shade400,
+                                        Colors.green.shade600
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                currentlyInside.toString(),
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 48,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                              Text(
+                                                "People Inside",
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 16,
+                                                  color: Colors.white
+                                                      .withOpacity(0.9),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Icon(
+                                            Icons.person_pin_circle,
+                                            size: 64,
+                                            color:
+                                                Colors.white.withOpacity(0.3),
+                                          ),
+                                        ],
+                                      ),
+                                      if (insidePerGate.isNotEmpty) ...[
+                                        const SizedBox(height: 16),
+                                        const Divider(
+                                            color: Colors.white54, height: 1),
+                                        const SizedBox(height: 16),
+                                        ...insidePerGate.entries.map((entry) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                                bottom: 8),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.door_front_door,
+                                                      color: Colors.white,
+                                                      size: 18,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      entry.key,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        color: Colors.white,
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white
+                                                        .withOpacity(0.2),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  child: Text(
+                                                    "${entry.value}",
+                                                    style: GoogleFonts.poppins(
+                                                      color: Colors.white,
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ).animate().fadeIn(delay: 200.ms).scale(),
+
+                            const SizedBox(height: 24),
+
                             // User Statistics
                             Text(
                               "User Statistics",
@@ -339,7 +562,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                       Colors.blue.shade400,
                                       Colors.blue.shade600
                                     ],
-                                    200,
+                                    300,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -352,7 +575,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                       Colors.green.shade400,
                                       Colors.green.shade600
                                     ],
-                                    300,
+                                    400,
                                   ),
                                 ),
                               ],
@@ -363,7 +586,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               allowedUsers.toString(),
                               Icons.verified_user,
                               [Colors.teal.shade400, Colors.teal.shade600],
-                              400,
+                              500,
                             ),
 
                             const SizedBox(height: 24),
@@ -388,7 +611,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                       Colors.green.shade400,
                                       Colors.green.shade600
                                     ],
-                                    500,
+                                    600,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -401,7 +624,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                       Colors.orange.shade400,
                                       Colors.orange.shade600
                                     ],
-                                    600,
+                                    700,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -411,7 +634,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                     todayDenied.toString(),
                                     Icons.block,
                                     [Colors.red.shade400, Colors.red.shade600],
-                                    700,
+                                    800,
                                   ),
                                 ),
                               ],
@@ -432,7 +655,12 @@ class _DashboardPageState extends State<DashboardPage> {
                                 ),
                                 TextButton(
                                   onPressed: () {
-                                    // Navigate to all logs
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const AllLogsPage(),
+                                      ),
+                                    );
                                   },
                                   child: Text(
                                     "View All",
@@ -524,7 +752,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                     .animate()
                                     .fadeIn(
                                         delay: Duration(
-                                            milliseconds: 800 + (index * 50)))
+                                            milliseconds: 900 + (index * 50)))
                                     .slideX(begin: 0.2, end: 0);
                               }),
                           ],

@@ -417,7 +417,10 @@ class _AddUserPageState extends State<AddUserPage> {
                       items: roles.map((role) {
                         return DropdownMenuItem(
                           value: role,
-                          child: Text(role.toUpperCase()),
+                          child: Text(
+                            role.toUpperCase(),
+                            style: GoogleFonts.poppins(color: Colors.black),
+                          ),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -453,7 +456,10 @@ class _AddUserPageState extends State<AddUserPage> {
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
-                              Text(access.toUpperCase()),
+                              Text(
+                                access.toUpperCase(),
+                                style: GoogleFonts.poppins(color: Colors.black),
+                              ),
                             ],
                           ),
                         );
@@ -662,12 +668,15 @@ class _AddUserPageState extends State<AddUserPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Icon(Icons.add_circle, size: 24),
-                          const SizedBox(width: 12),
-                          Text(
-                            "Create User & Generate Barcode",
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              "Create User & Generate Barcode",
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],

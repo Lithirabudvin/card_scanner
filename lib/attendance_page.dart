@@ -13,11 +13,12 @@ class AttendancePage extends StatefulWidget {
 
 class _AttendancePageState extends State<AttendancePage>
     with SingleTickerProviderStateMixin {
-  final attendanceDb = FirebaseDatabase.instance.ref("attendance");
-  final currentInsideDb = FirebaseDatabase.instance.ref("current_inside");
+  final logsDb = FirebaseDatabase.instance.ref("logs");
+  final usersDb = FirebaseDatabase.instance.ref("users");
 
-  List<Map<String, dynamic>> currentInside = [];
+  Map<String, Map<String, dynamic>> currentInsideByGate = {};
   List<Map<String, dynamic>> attendanceRecords = [];
+  Map<String, String> barcodeToName = {};
   bool isLoading = true;
 
   late TabController _tabController;
@@ -38,83 +39,171 @@ class _AttendancePageState extends State<AttendancePage>
 
   void loadData() async {
     setState(() => isLoading = true);
-    loadCurrentInside();
-    loadAttendanceRecords();
+    loadUsers();
+    loadLogs();
   }
 
-  void loadCurrentInside() {
-    currentInsideDb.onValue.listen((event) {
+  void loadUsers() {
+    usersDb.onValue.listen((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
 
       if (data != null) {
-        List<Map<String, dynamic>> loaded = [];
-        data.forEach((key, value) {
-          loaded.add({
-            "userId": value["userId"] ?? "N/A",
-            "userName": value["userName"] ?? "N/A",
-            "barcodeId": value["barcodeId"] ?? "N/A",
-            "entranceTime": value["entranceTime"] ?? 0,
-            "sessionId": value["sessionId"] ?? "N/A",
-          });
+        Map<String, String> mapping = {};
+        data.forEach((barcodeId, userData) {
+          mapping[barcodeId] = userData["name"] ?? "Unknown";
         });
 
         if (mounted) {
           setState(() {
-            currentInside = loaded;
-            isLoading = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            currentInside = [];
-            isLoading = false;
+            barcodeToName = mapping;
           });
         }
       }
     });
   }
 
-  void loadAttendanceRecords() {
-    attendanceDb.onValue.listen((event) {
+  void loadLogs() {
+    logsDb.onValue.listen((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
 
       if (data != null) {
-        List<Map<String, dynamic>> loaded = [];
+        // Process all logs
+        List<Map<String, dynamic>> allLogs = [];
 
-        data.forEach((userId, sessions) {
-          if (sessions is Map) {
-            sessions.forEach((sessionId, sessionData) {
-              loaded.add({
-                "sessionId": sessionId,
-                "userId": sessionData["userId"] ?? "N/A",
-                "userName": sessionData["userName"] ?? "N/A",
-                "barcodeId": sessionData["barcodeId"] ?? "N/A",
-                "entranceTime": sessionData["entranceTime"] ?? 0,
-                "exitTime": sessionData["exitTime"],
-                "duration": sessionData["duration"],
-                "date": sessionData["date"] ?? "N/A",
-                "status": sessionData["status"] ?? "N/A",
-              });
+        data.forEach((deviceId, deviceLogs) {
+          if (deviceLogs is Map) {
+            deviceLogs.forEach((logId, logData) {
+              if (logData["status"] == "entry" || logData["status"] == "exit") {
+                allLogs.add({
+                  "logId": logId,
+                  "barcode": logData["barcode"] ?? "N/A",
+                  "timestamp": logData["timestamp"] ?? "N/A",
+                  "status": logData["status"] ?? "N/A",
+                  "deviceID": logData["deviceID"] ?? deviceId,
+                });
+              }
             });
           }
         });
 
-        loaded.sort((a, b) => b["entranceTime"].compareTo(a["entranceTime"]));
+        // Sort by timestamp
+        allLogs.sort((a, b) {
+          try {
+            DateTime timeA = DateTime.parse(a["timestamp"]);
+            DateTime timeB = DateTime.parse(b["timestamp"]);
+            return timeA.compareTo(timeB);
+          } catch (e) {
+            return 0;
+          }
+        });
 
-        if (mounted) {
-          setState(() {
-            attendanceRecords = loaded;
-          });
-        }
+        // Calculate current inside and attendance sessions
+        _calculateAttendance(allLogs);
       } else {
         if (mounted) {
           setState(() {
+            currentInsideByGate = {};
             attendanceRecords = [];
+            isLoading = false;
           });
         }
       }
     });
+  }
+
+  void _calculateAttendance(List<Map<String, dynamic>> allLogs) {
+    Map<String, Map<String, dynamic>> insideByGate = {};
+    List<Map<String, dynamic>> sessions = [];
+
+    // Track last entry per user per gate
+    Map<String, Map<String, dynamic>> lastEntryByUserAndGate = {};
+
+    for (var log in allLogs) {
+      String barcode = log["barcode"];
+      String deviceId = log["deviceID"];
+      String status = log["status"];
+      DateTime timestamp;
+
+      try {
+        timestamp = DateTime.parse(log["timestamp"]);
+      } catch (e) {
+        continue;
+      }
+
+      String userGateKey = "$barcode-$deviceId";
+
+      if (status == "entry") {
+        // User entered a gate
+        lastEntryByUserAndGate[userGateKey] = {
+          "barcode": barcode,
+          "deviceID": deviceId,
+          "entryTime": timestamp,
+          "entryTimestamp": log["timestamp"],
+        };
+
+        // Update current inside for this gate
+        insideByGate[userGateKey] = {
+          "barcode": barcode,
+          "userName": barcodeToName[barcode] ?? "Unknown User",
+          "deviceID": deviceId,
+          "entranceTime": timestamp.millisecondsSinceEpoch,
+          "entranceTimestamp": log["timestamp"],
+        };
+      } else if (status == "exit") {
+        // User exited - find matching entry
+        if (lastEntryByUserAndGate.containsKey(userGateKey)) {
+          var entry = lastEntryByUserAndGate[userGateKey]!;
+          DateTime entryTime = entry["entryTime"] as DateTime;
+          int duration = timestamp.difference(entryTime).inMilliseconds;
+
+          // Create completed session
+          sessions.add({
+            "barcode": barcode,
+            "userName": barcodeToName[barcode] ?? "Unknown User",
+            "deviceID": deviceId,
+            "entranceTime": entryTime.millisecondsSinceEpoch,
+            "exitTime": timestamp.millisecondsSinceEpoch,
+            "duration": duration,
+            "date": DateFormat('yyyy-MM-dd').format(entryTime),
+            "status": "completed",
+            "entryTimestamp": entry["entryTimestamp"],
+            "exitTimestamp": log["timestamp"],
+          });
+
+          // Remove from current inside
+          insideByGate.remove(userGateKey);
+          lastEntryByUserAndGate.remove(userGateKey);
+        }
+      }
+    }
+
+    // Add in-progress sessions (still inside)
+    lastEntryByUserAndGate.forEach((userGateKey, entry) {
+      DateTime entryTime = entry["entryTime"] as DateTime;
+      sessions.add({
+        "barcode": entry["barcode"],
+        "userName": barcodeToName[entry["barcode"]] ?? "Unknown User",
+        "deviceID": entry["deviceID"],
+        "entranceTime": entryTime.millisecondsSinceEpoch,
+        "exitTime": null,
+        "duration": null,
+        "date": DateFormat('yyyy-MM-dd').format(entryTime),
+        "status": "in_progress",
+        "entryTimestamp": entry["entryTimestamp"],
+        "exitTimestamp": null,
+      });
+    });
+
+    // Sort sessions by entry time (most recent first)
+    sessions.sort((a, b) => b["entranceTime"].compareTo(a["entranceTime"]));
+
+    if (mounted) {
+      setState(() {
+        currentInsideByGate = insideByGate;
+        attendanceRecords = sessions;
+        isLoading = false;
+      });
+    }
   }
 
   String formatTimestamp(int? timestamp) {
@@ -225,7 +314,7 @@ class _AttendancePageState extends State<AttendancePage>
                                 ),
                               ),
                               Text(
-                                'Track who\'s in and out',
+                                'Gate-wise tracking',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   color: Colors.white.withOpacity(0.9),
@@ -271,7 +360,7 @@ class _AttendancePageState extends State<AttendancePage>
                         children: [
                           const Icon(Icons.person_pin, size: 20),
                           const SizedBox(width: 8),
-                          Text("Inside (${currentInside.length})"),
+                          Text("Inside (${currentInsideByGate.length})"),
                         ],
                       ),
                     ),
@@ -309,35 +398,99 @@ class _AttendancePageState extends State<AttendancePage>
   }
 
   Widget _buildCurrentInsideTab() {
-    return currentInside.isEmpty
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.people_outline,
-                  size: 64,
-                  color: Colors.grey.shade400,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "No one is currently inside",
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
+    if (currentInsideByGate.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.people_outline,
+              size: 64,
+              color: Colors.grey.shade400,
             ),
-          )
-        : ListView.builder(
-            itemCount: currentInside.length,
-            padding: const EdgeInsets.all(20),
-            itemBuilder: (context, index) {
-              final person = currentInside[index];
+            const SizedBox(height: 16),
+            Text(
+              "No one is currently inside",
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Group by gate
+    Map<String, List<Map<String, dynamic>>> byGate = {};
+    currentInsideByGate.forEach((key, person) {
+      String gate = person["deviceID"];
+      if (!byGate.containsKey(gate)) {
+        byGate[gate] = [];
+      }
+      byGate[gate]!.add(person);
+    });
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: byGate.entries.map((entry) {
+        String gate = entry.key;
+        List<Map<String, dynamic>> people = entry.value;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Gate Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.purple.shade600, Colors.purple.shade400],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.door_front_door, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    gate,
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      "${people.length} inside",
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // People inside this gate
+            ...people.asMap().entries.map((personEntry) {
+              int index = personEntry.key;
+              var person = personEntry.value;
+
               return Card(
                 elevation: 3,
-                margin: const EdgeInsets.only(bottom: 16),
+                margin: const EdgeInsets.only(bottom: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -439,8 +592,13 @@ class _AttendancePageState extends State<AttendancePage>
                   .animate()
                   .fadeIn(delay: Duration(milliseconds: 100 * index))
                   .slideX(begin: -0.2, end: 0);
-            },
-          );
+            }).toList(),
+
+            const SizedBox(height: 20),
+          ],
+        );
+      }).toList(),
+    );
   }
 
   Widget _buildAttendanceRecordsTab() {
@@ -575,7 +733,7 @@ class _AttendancePageState extends State<AttendancePage>
                             ),
                           ),
                           title: Text(
-                            record["userName"],
+                            "${record["userName"]} @ ${record["deviceID"]}",
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.bold,
                             ),
@@ -616,6 +774,13 @@ class _AttendancePageState extends State<AttendancePage>
                               ),
                               child: Column(
                                 children: [
+                                  _buildDetailRow(
+                                    "Gate",
+                                    record["deviceID"],
+                                    Icons.door_front_door,
+                                    Colors.purple,
+                                  ),
+                                  const SizedBox(height: 12),
                                   _buildDetailRow(
                                     "Entrance",
                                     formatTimestamp(record["entranceTime"]),

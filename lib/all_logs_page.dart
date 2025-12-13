@@ -4,6 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 
+// FOCUSED PURPOSE: Complete event audit trail with advanced filters
+// Shows ALL events (entry/exit/denied) with powerful filtering
+// Used for: Security monitoring, compliance, detailed investigation
+
 class AllLogsPage extends StatefulWidget {
   const AllLogsPage({super.key});
 
@@ -168,7 +172,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
   String formatTimestamp(String timestamp) {
     try {
       DateTime dt = DateTime.parse(timestamp);
-      return DateFormat('MMM dd, yyyy HH:mm').format(dt);
+      return DateFormat('MMM dd, yyyy HH:mm:ss').format(dt);
     } catch (e) {
       return timestamp;
     }
@@ -245,7 +249,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Door Logs',
+                                'Event Audit Log',
                                 style: GoogleFonts.poppins(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
@@ -253,7 +257,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
                                 ),
                               ),
                               Text(
-                                '${filteredLogs.length} log(s) found',
+                                'Complete event history with filters',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   color: Colors.white.withOpacity(0.9),
@@ -311,18 +315,36 @@ class _AllLogsPageState extends State<AllLogsPage> {
                 ),
               ),
 
-              // Filters
+              // Advanced Filters Section
               Container(
                 padding: const EdgeInsets.all(20),
                 color: Colors.grey.shade100,
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        Icon(Icons.filter_list,
+                            size: 18, color: Colors.grey.shade700),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Advanced Filters",
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
                     // Status Filter
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          _buildFilterChip("All", "all"),
+                          _buildFilterChip("All Events", "all"),
                           const SizedBox(width: 8),
                           _buildFilterChip("Entry", "entry"),
                           const SizedBox(width: 8),
@@ -357,7 +379,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
                                   return DropdownMenuItem(
                                     value: device,
                                     child: Text(
-                                      device == "all" ? "All Devices" : device,
+                                      device == "all" ? "All Gates" : device,
                                     ),
                                   );
                                 }).toList(),
@@ -408,6 +430,43 @@ class _AllLogsPageState extends State<AllLogsPage> {
                 ),
               ),
 
+              // Results Count
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                color: Colors.grey.shade50,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "${filteredLogs.length} event(s) found",
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    if (selectedFilter != "all" ||
+                        selectedDevice != "all" ||
+                        selectedDate != null)
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            selectedFilter = "all";
+                            selectedDevice = "all";
+                            selectedDate = null;
+                          });
+                        },
+                        icon: const Icon(Icons.clear_all, size: 16),
+                        label: Text(
+                          "Clear Filters",
+                          style: GoogleFonts.poppins(fontSize: 12),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
               // Logs List
               Expanded(
                 child: isLoading
@@ -418,16 +477,25 @@ class _AllLogsPageState extends State<AllLogsPage> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.history,
+                                  Icons.search_off,
                                   size: 64,
                                   color: Colors.grey.shade400,
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  "No logs found",
+                                  "No events found",
                                   style: GoogleFonts.poppins(
                                     fontSize: 16,
+                                    fontWeight: FontWeight.w600,
                                     color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "Try adjusting your filters",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade500,
                                   ),
                                 ),
                               ],
@@ -525,7 +593,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Icon(
-                                                    Icons.device_hub,
+                                                    Icons.door_front_door,
                                                     size: 12,
                                                     color: Colors.grey.shade600,
                                                   ),
@@ -553,7 +621,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
                                                     formatTimestamp(
                                                         log["timestamp"]),
                                                     style: GoogleFonts.poppins(
-                                                      fontSize: 12,
+                                                      fontSize: 11,
                                                       color:
                                                           Colors.grey.shade600,
                                                     ),
@@ -635,6 +703,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
       labelStyle: GoogleFonts.poppins(
         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
         color: isSelected ? Colors.white : Colors.grey.shade700,
+        fontSize: 13,
       ),
       backgroundColor: Colors.white,
       selectedColor: Colors.orange.shade600,
@@ -668,7 +737,7 @@ class _AllLogsPageState extends State<AllLogsPage> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    "Log Details",
+                    "Event Details",
                     style: GoogleFonts.poppins(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -680,8 +749,8 @@ class _AllLogsPageState extends State<AllLogsPage> {
             const SizedBox(height: 24),
             _buildDetailRow("User", userName),
             _buildDetailRow("Barcode", log["barcode"]),
-            _buildDetailRow("Status", log["status"].toString().toUpperCase()),
-            _buildDetailRow("Device", log["deviceID"]),
+            _buildDetailRow("Event", log["status"].toString().toUpperCase()),
+            _buildDetailRow("Gate", log["deviceID"]),
             _buildDetailRow("Timestamp", formatTimestamp(log["timestamp"])),
             _buildDetailRow("Log ID", log["logId"]),
             const SizedBox(height: 24),
