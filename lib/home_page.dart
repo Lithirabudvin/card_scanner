@@ -380,19 +380,6 @@ class _HomePageState extends State<HomePage> {
 
               const SizedBox(height: 30),
 
-              // Quick Stats Overview
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Quick Stats',
-                  style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
               // Quick Access Carousel
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
