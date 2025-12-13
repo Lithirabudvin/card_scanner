@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
 import 'signup_page.dart';
 import 'home_page.dart';
+import 'email_verification_page.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -34,16 +36,63 @@ class _SignInPageState extends State<SignInPage> {
     setState(() => _isLoading = true);
 
     try {
-      await _authService.signInWithEmailPassword(
+      // Try to sign in
+      UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
 
       if (!mounted) return;
 
+      // Check if email is verified
+      if (!userCredential.user!.emailVerified) {
+        // Redirect to verification page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const EmailVerificationPage()),
+        );
+        return;
+      }
+
+      // Email is verified, proceed to home
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomePage()),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No user found with this email.';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Incorrect password.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'The email address is invalid.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This account has been disabled.';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many attempts. Please try again later.';
+          break;
+        default:
+          errorMessage = 'An error occurred: ${e.message}';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red.shade400,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 4),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -85,7 +134,7 @@ class _SignInPageState extends State<SignInPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Password reset email sent!'),
+          content: const Text('Password reset email sent! Check your inbox.'),
           backgroundColor: Colors.green.shade400,
           behavior: SnackBarBehavior.floating,
         ),

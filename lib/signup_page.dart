@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'auth_service.dart';
-import 'home_page.dart';
+import 'email_verification_page.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -46,9 +46,21 @@ class _SignUpPageState extends State<SignUpPage> {
 
       if (!mounted) return;
 
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Account created! Please verify your email.'),
+          backgroundColor: Colors.green.shade400,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+
+      // Navigate to email verification page
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(builder: (_) => const EmailVerificationPage()),
       );
     } catch (e) {
       if (!mounted) return;
